@@ -254,7 +254,7 @@ export function DataExplorer({
     onSelectState,
     onRefreshStates,
 }: DataExplorerProps) {
-    const { theme, saveDashboard, listDashboards, searchDashboards, loadDashboard, deleteDashboard, analyzeDataset, refineDashboard } = useDashboard();
+    const { theme, addPanel, saveDashboard, listDashboards, searchDashboards, loadDashboard, deleteDashboard, analyzeDataset, refineDashboard } = useDashboard();
     const caps = useCapabilities();
 
     const [mode, setMode] = useState<Mode>('dashboard');
@@ -403,7 +403,7 @@ export function DataExplorer({
                         {mode === 'sql' ? (
                             <SqlConsole columns={columns} stateId={activeStateId ?? undefined} />
                         ) : mode === 'builder' ? (
-                            <ChartBuilder records={records} columns={columns} stateId={activeStateId ?? undefined} />
+                            <ChartBuilder records={records} columns={columns} stateId={activeStateId ?? undefined} onSave={addPanel} />
                         ) : (
                             <>
                                 <div className="flex-1 min-h-0 overflow-auto">

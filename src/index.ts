@@ -19,6 +19,7 @@ export type {
     DashboardProviderProps,
     QueryResult,
     SavedDashboard,
+    PanelInput,
 } from './context/DashboardContext';
 
 // SQL generation + result shaping (pure)

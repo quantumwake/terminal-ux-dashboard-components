@@ -35,6 +35,16 @@ export interface SavedDashboard {
     [key: string]: unknown;
 }
 
+// PanelInput is a chart panel handed to addPanel (the host assigns the id and
+// appends it to the active dashboard, creating one if none exists).
+export interface PanelInput {
+    title: string;
+    type: string;
+    config: Record<string, unknown>;
+    width: number;
+    height: number;
+}
+
 // DashboardCapabilities are the functions a host wires in. runQuery is REQUIRED;
 // the rest are OPTIONAL and gate their UI (absent ⇒ hidden).
 export interface DashboardCapabilities {
@@ -53,6 +63,11 @@ export interface DashboardCapabilities {
     // OPTIONAL — AI assist (studio-only).
     analyzeDataset?: () => Promise<void> | void;
     refineDashboard?: (prompt: string) => Promise<void> | void;
+
+    // OPTIONAL — add a chart panel to the active dashboard (studio-only). Absent ⇒
+    // the chart builder's "Add to Dashboard" affordance is hidden. The host
+    // appends the panel (and creates the dashboard if none exists).
+    addPanel?: (panel: PanelInput) => void;
 
     // OPTIONAL — editing (studio-only). Absent ⇒ panels are read-only.
     removePanel?: (panelId: string) => void;
@@ -97,6 +112,7 @@ export function useCapabilities() {
         canDelete: !!c.deleteDashboard,
         canAnalyze: !!c.analyzeDataset,
         canRefine: !!c.refineDashboard,
+        canAddPanel: !!c.addPanel,
         canEditPanels: !!c.removePanel,
     };
 }
