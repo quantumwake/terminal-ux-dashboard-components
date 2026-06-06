@@ -6,7 +6,7 @@
 //   - studio (ui-enterprise): wires removePanel ⇒ panels show a remove button.
 //   - published viewer (publish-ui): omits removePanel ⇒ read-only dashboard.
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { X, Sparkles } from 'lucide-react';
 
 import { useDashboard, useCapabilities } from '../context/DashboardContext';
@@ -107,6 +107,10 @@ interface SqlPanelProps {
  */
 function SqlPanel({ panel }: SqlPanelProps) {
     const { runQuery } = useDashboard();
+    // Ref so the query effect doesn't depend on runQuery's identity (hosts pass
+    // an inline runQuery → depending on it would loop). See ChartBuilder.
+    const runQueryRef = useRef(runQuery);
+    runQueryRef.current = runQuery;
     const config: PanelConfig = panel.config || {};
     const chartType = config.chartType || (panel.type as ChartType | 'metric');
 
@@ -119,7 +123,7 @@ function SqlPanel({ panel }: SqlPanelProps) {
         setLoading(true);
         setError(null);
         const sql = config.sql || '';
-        runQuery(sql).then(
+        runQueryRef.current(sql).then(
             (res) => {
                 if (cancelled) return;
                 setLoading(false);
@@ -133,7 +137,7 @@ function SqlPanel({ panel }: SqlPanelProps) {
             },
         );
         return () => { cancelled = true; };
-    }, [config.sql, runQuery]);
+    }, [config.sql]);
 
     if (loading && !rows) {
         return <div className="flex items-center justify-center h-full text-xs text-midnight-text-muted">Running…</div>;

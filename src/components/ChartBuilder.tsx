@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, Suspense } from 'react';
+import { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import { ResponsiveBar } from '@nivo/bar';
 import {
     BarChart3, PieChart, TrendingUp, ScatterChart, LayoutGrid,
@@ -428,6 +428,11 @@ type Zone = 'x' | 'y' | 'value' | 'group' | 'color';
  */
 export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilderProps) {
     const { theme, runQuery } = useDashboard();
+    // Hold runQuery in a ref so effects don't depend on its identity — hosts
+    // commonly pass an inline runQuery (new each render); depending on it would
+    // re-fire the query effect every render → infinite setState loop.
+    const runQueryRef = useRef(runQuery);
+    runQueryRef.current = runQuery;
 
     const [chartType, setChartType] = useState<ChartType>('bar');
     const [xFields, setXFields] = useState<ChartField[]>([]);
@@ -471,7 +476,7 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
         let cancelled = false;
         setSqlLoading(true);
         setSqlError(null);
-        runQuery(generatedSql, stateId).then((res) => {
+        runQueryRef.current(generatedSql, stateId).then((res) => {
             if (cancelled) return;
             setSqlLoading(false);
             setSqlRows(res.rows || []);
@@ -482,7 +487,7 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
             setSqlError(err instanceof Error ? err.message : String(err) || 'Query failed');
         });
         return () => { cancelled = true; };
-    }, [engineMode, generatedSql, runQuery, stateId]);
+    }, [engineMode, generatedSql, stateId]);
 
     const addField = (zone: Zone, field: ChartField) => {
         switch (zone) {
