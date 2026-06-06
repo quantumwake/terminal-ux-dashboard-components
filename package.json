@@ -1,6 +1,6 @@
 {
   "name": "@quantumwake/terminal-ux-dashboard-components",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Dashboard, chart-builder and SQL-runner React components for the Alethic ISM apps. Capability-injected: the host wires the query/save/load/search fns. ui-enterprise is the source of truth; the published viewer omits the logged-in-only verbs (save/edit/load) and renders read-only.",
   "license": "MIT",
   "author": "quantumwake.io",
