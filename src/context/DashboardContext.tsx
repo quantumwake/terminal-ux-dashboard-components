@@ -64,6 +64,12 @@ export interface DashboardCapabilities {
     analyzeDataset?: () => Promise<void> | void;
     refineDashboard?: (prompt: string) => Promise<void> | void;
 
+    // OPTIONAL — start a fresh, empty dashboard (studio-only). Absent ⇒ no explicit
+    // "New Dashboard" affordance (a dashboard is otherwise created implicitly by
+    // the first addPanel). The host sets a blank active dashboard + clears the
+    // persisted id so the next Save creates a new record.
+    newDashboard?: () => void;
+
     // OPTIONAL — add a chart panel to the active dashboard (studio-only). Absent ⇒
     // the chart builder's "Add to Dashboard" affordance is hidden. The host
     // appends the panel (and creates the dashboard if none exists).
@@ -112,6 +118,7 @@ export function useCapabilities() {
         canDelete: !!c.deleteDashboard,
         canAnalyze: !!c.analyzeDataset,
         canRefine: !!c.refineDashboard,
+        canNew: !!c.newDashboard,
         canAddPanel: !!c.addPanel,
         canEditPanels: !!c.removePanel,
     };

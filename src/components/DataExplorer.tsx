@@ -17,7 +17,7 @@
 
 import { useState } from 'react';
 import {
-    Database, BarChart3, Rows3,
+    Database, BarChart3, Rows3, Plus,
     ChevronDown, Sparkles, Send, Loader2, RefreshCw, Save, FolderOpen, Trash2, Terminal, Maximize2, Minimize2,
 } from 'lucide-react';
 
@@ -254,7 +254,7 @@ export function DataExplorer({
     onSelectState,
     onRefreshStates,
 }: DataExplorerProps) {
-    const { theme, addPanel, saveDashboard, listDashboards, searchDashboards, loadDashboard, deleteDashboard, analyzeDataset, refineDashboard } = useDashboard();
+    const { theme, newDashboard, addPanel, saveDashboard, listDashboards, searchDashboards, loadDashboard, deleteDashboard, analyzeDataset, refineDashboard } = useDashboard();
     const caps = useCapabilities();
 
     const [mode, setMode] = useState<Mode>('dashboard');
@@ -340,6 +340,13 @@ export function DataExplorer({
                         <ModeTab active={mode === 'builder'} onClick={() => setMode('builder')} icon={BarChart3} label="Chart Builder" />
                         <ModeTab active={mode === 'sql'} onClick={() => setMode('sql')} icon={Terminal} label="SQL" />
 
+                        {caps.canNew && (
+                            <button onClick={() => { newDashboard?.(); setMode('builder'); }} title="Start a new dashboard"
+                                className="flex items-center gap-1 px-2 py-1 text-xs font-mono border border-midnight-border text-midnight-text-muted hover:bg-midnight-raised hover:text-midnight-accent transition-colors">
+                                <Plus className="w-3.5 h-3.5" /> New Dashboard
+                            </button>
+                        )}
+
                         {showPersistence && (
                             <div className="flex items-center gap-1 ml-auto">
                                 {caps.canSave && showSaveInput && (
@@ -403,7 +410,8 @@ export function DataExplorer({
                         {mode === 'sql' ? (
                             <SqlConsole columns={columns} stateId={activeStateId ?? undefined} />
                         ) : mode === 'builder' ? (
-                            <ChartBuilder records={records} columns={columns} stateId={activeStateId ?? undefined} onSave={addPanel} />
+                            <ChartBuilder records={records} columns={columns} stateId={activeStateId ?? undefined}
+                                onSave={addPanel ? (panel) => { addPanel(panel); setMode('dashboard'); } : undefined} />
                         ) : (
                             <>
                                 <div className="flex-1 min-h-0 overflow-auto">
@@ -415,8 +423,16 @@ export function DataExplorer({
                                             <p className="text-sm">
                                                 {caps.canAnalyze
                                                     ? <>Click <strong>Auto-Analyze</strong> to generate an AI dashboard</>
-                                                    : 'No dashboard to display'}
+                                                    : caps.canNew
+                                                        ? 'Start a new dashboard, then add charts from the Chart Builder'
+                                                        : 'No dashboard to display'}
                                             </p>
+                                            {caps.canNew && (
+                                                <button onClick={() => { newDashboard?.(); setMode('builder'); }}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono border border-midnight-accent text-midnight-accent hover:bg-midnight-accent/10 transition-colors">
+                                                    <Plus className="w-4 h-4" /> Create Dashboard
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
