@@ -20,6 +20,7 @@ export type {
     QueryResult,
     SavedDashboard,
     PanelInput,
+    PanelLayout,
 } from './context/DashboardContext';
 
 // SQL generation + result shaping (pure)

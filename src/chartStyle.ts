@@ -31,9 +31,10 @@ export interface ChartStyle {
     // Axis title emphasis: bold weight + a highlight halo (outline) colour.
     legendBold: boolean;
     legendHighlight: string; // '' ⇒ no halo
-    // Tick handling (overflow): rotate the x ticks, truncate long categorical
+    // Tick handling (overflow): rotate the x / y ticks, truncate long categorical
     // tick labels to N chars with an ellipsis (0 ⇒ off).
     xTickRotation: number;
+    yTickRotation: number;
     tickTruncate: number;
     // Series legend placement (charts that have one: pie, grouped bar).
     legendAnchor: LegendAnchor;
@@ -67,6 +68,7 @@ export const DEFAULT_CHART_STYLE: ChartStyle = {
     legendHighlight: '',
     // Tick overflow handling.
     xTickRotation: -35,
+    yTickRotation: 0,
     tickTruncate: 0,
     // Series legend placement (charts that have one: pie, grouped bar).
     legendAnchor: 'right',
@@ -165,7 +167,7 @@ export const axisLegend = (
         out.legendPosition = isX ? s.xLegendPosition : s.yLegendPosition;
         out.legendOffset = isX ? s.xLegendOffset : s.yLegendOffset;
     }
-    if (isX) out.tickRotation = s.xTickRotation;
+    out.tickRotation = isX ? s.xTickRotation : s.yTickRotation;
     if (opts.numeric) out.format = (v: unknown) => Number(v).toLocaleString();
     else if (s.tickTruncate > 0) out.format = (v: unknown) => truncate(v, s.tickTruncate);
     return out;

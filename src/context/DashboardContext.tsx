@@ -85,6 +85,23 @@ export interface DashboardCapabilities {
     // live query, no dataset download. Absent ⇒ no Refresh; panels are pure
     // precomputed-or-unavailable (the published viewer).
     persistPanelData?: (panelId: string, rows: QueryResult['rows'], refreshedAt: string) => void;
+
+    // OPTIONAL — persist the dashboard grid layout (studio-only). When wired,
+    // panels become draggable + resizable; on drop/resize the new geometry
+    // (per-panel x/y/w/h, in 12-col grid units) is handed back here so the host
+    // stores it on the panels and saves. Absent ⇒ a static (read-only) grid — the
+    // published viewer renders panels exactly where the studio left them.
+    persistLayout?: (items: PanelLayout[]) => void;
+}
+
+// PanelLayout is one panel's position + size in the 12-column grid (grid units,
+// not pixels). x/y are the top-left cell; w/h the span.
+export interface PanelLayout {
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
 }
 
 export interface DashboardContextValue extends DashboardCapabilities {
@@ -131,5 +148,7 @@ export function useCapabilities() {
         canEditPanels: !!c.removePanel,
         // Studio can recompute + persist a panel's precomputed result.
         canRefresh: !!c.persistPanelData,
+        // Studio can drag/resize panels and persist the grid layout.
+        canEditLayout: !!c.persistLayout,
     };
 }

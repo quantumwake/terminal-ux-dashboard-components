@@ -6,10 +6,11 @@
 //   - studio (ui-enterprise): wires removePanel ⇒ panels show a remove button.
 //   - published viewer (publish-ui): omits removePanel ⇒ read-only dashboard.
 
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { X, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
+import GridLayout, { WidthProvider, type Layout } from 'react-grid-layout';
 
-import { useDashboard, useCapabilities } from '../context/DashboardContext';
+import { useDashboard, useCapabilities, type PanelLayout } from '../context/DashboardContext';
 import { shapeChartData, buildChartSQL, aggExpr, qIdent } from '../sqlgen';
 import type { Row, ChartType, ChartField, ChartConfig, ChartFilter } from '../sqlgen';
 import type { ChartStyle } from '../chartStyle';
@@ -71,8 +72,12 @@ export interface DashboardPanel {
     id: string;
     type: string;
     title?: string;
+    // Grid geometry (12-col units). width/height = span; x/y = top-left cell.
+    // x/y are optional — absent ⇒ the renderer auto-packs in panel order.
     width?: number;
     height?: number;
+    x?: number;
+    y?: number;
     config?: PanelConfig;
 }
 
@@ -394,16 +399,88 @@ function PanelContent({ panel, records, columns }: PanelContentProps) {
 
 // ─── DashboardRenderer ─────────────────────────────────────────────────────
 
-const ROW_HEIGHT = 180; // px per grid row
+const GRID_COLS = 12;
+const ROW_HEIGHT = 80;   // px per grid row unit
+const GRID_MARGIN = 10;  // px gap between panels
+// A panel header drag-handle class — only the header drags (so charts stay
+// interactive). react-grid-layout matches it via draggableHandle.
+const DRAG_HANDLE = 'panel-drag-handle';
+
+// react-grid-layout needs its CSS for the resize handle + drag transitions.
+// Rather than make every host import a stylesheet, inject the minimal rules once
+// (scoped to .react-grid-* / .react-resizable-*). Styled to match the dark theme.
+const RGL_CSS = `
+.react-grid-layout { position: relative; transition: height 200ms ease; }
+.react-grid-item { transition: all 200ms ease; transition-property: left, top, width, height; box-sizing: border-box; }
+.react-grid-item.cssTransforms { transition-property: transform, width, height; }
+.react-grid-item.resizing { transition: none; z-index: 3; will-change: width, height; }
+.react-grid-item.react-draggable-dragging { transition: none; z-index: 3; will-change: transform; }
+.react-grid-item.react-grid-placeholder { background: rgba(99,102,241,0.18); border: 1px dashed #6366f1; border-radius: 2px; transition-duration: 100ms; z-index: 2; user-select: none; }
+.react-grid-item > .react-resizable-handle { position: absolute; width: 18px; height: 18px; bottom: 0; right: 0; cursor: se-resize; }
+.react-grid-item > .react-resizable-handle::after { content: ''; position: absolute; right: 4px; bottom: 4px; width: 6px; height: 6px; border-right: 2px solid rgba(148,163,184,0.7); border-bottom: 2px solid rgba(148,163,184,0.7); }
+.${DRAG_HANDLE} { cursor: grab; }
+.react-grid-item.react-draggable-dragging .${DRAG_HANDLE} { cursor: grabbing; }
+`;
+
+let rglCssInjected = false;
+function useInjectRglCss() {
+    useEffect(() => {
+        if (rglCssInjected || typeof document === 'undefined') return;
+        const el = document.createElement('style');
+        el.setAttribute('data-rgl', 'dashboard-renderer');
+        el.textContent = RGL_CSS;
+        document.head.appendChild(el);
+        rglCssInjected = true;
+    }, []);
+}
+
+// WidthProvider sizes the grid to its container; computed once (module scope) so
+// the HOC identity is stable across renders.
+const GridLayoutWithWidth = WidthProvider(GridLayout);
+
+// Build the react-grid-layout `layout` from the panels. Honors saved x/y; for
+// panels without a saved position, auto-packs them left→right, top→bottom in
+// panel order (so legacy dashboards — which only stored width/height — still lay
+// out sensibly until the user drags them).
+function buildLayout(panels: DashboardPanel[]): Layout[] {
+    let cx = 0, cy = 0, rowH = 0;
+    return panels.map((p) => {
+        const w = Math.min(Math.max(p.width || 6, 1), GRID_COLS);
+        const h = Math.max(p.height || 4, 1);
+        if (typeof p.x === 'number' && typeof p.y === 'number') {
+            return { i: p.id, x: p.x, y: p.y, w, h, minW: 2, minH: 2 };
+        }
+        // Auto-pack: wrap to the next row when this panel won't fit.
+        if (cx + w > GRID_COLS) { cx = 0; cy += rowH; rowH = 0; }
+        const item = { i: p.id, x: cx, y: cy, w, h, minW: 2, minH: 2 };
+        cx += w;
+        rowH = Math.max(rowH, h);
+        return item;
+    });
+}
 
 /**
  * DashboardRenderer — renders a grid of AI-generated or manually configured
- * panels. The per-panel remove button is gated behind canEditPanels: the
- * published viewer (no removePanel) renders the dashboard READ-ONLY.
+ * panels via react-grid-layout. Editing is capability-gated:
+ *   - studio (persistLayout wired) ⇒ panels drag (by their header) + resize, and
+ *     the new geometry is persisted back to the host.
+ *   - published viewer (no persistLayout) ⇒ a static grid, rendered exactly where
+ *     the studio left the panels.
+ * The per-panel remove button is similarly gated behind canEditPanels.
  */
 export function DashboardRenderer({ dashboard, records, columns }: DashboardRendererProps) {
-    const { theme, removePanel } = useDashboard();
-    const { canEditPanels } = useCapabilities();
+    const { theme, removePanel, persistLayout } = useDashboard();
+    const { canEditPanels, canEditLayout } = useCapabilities();
+    useInjectRglCss();
+
+    const panels = dashboard?.panels ?? [];
+    // Recompute only when the panel set / geometry changes (not on every render).
+    const layout = useMemo(() => buildLayout(panels), [panels]);
+
+    const onLayoutChange = useCallback((next: Layout[]) => {
+        if (!persistLayout) return;
+        persistLayout(next.map((l): PanelLayout => ({ id: l.i, x: l.x, y: l.y, w: l.w, h: l.h })));
+    }, [persistLayout]);
 
     if (!dashboard) return null;
 
@@ -417,51 +494,55 @@ export function DashboardRenderer({ dashboard, records, columns }: DashboardRend
                 </div>
             )}
 
-            {/* Panel grid */}
-            <div className="grid grid-cols-12 gap-3">
-                {dashboard.panels?.map((panel) => {
-                    const colSpan = Math.min(Math.max(panel.width || 6, 1), 12);
-                    const rowSpan = Math.min(Math.max(panel.height || 2, 1), 4);
-
-                    return (
-                        <div
-                            key={panel.id}
-                            className={`border ${theme.border} bg-midnight-surface flex flex-col`}
-                            style={{
-                                gridColumn: `span ${colSpan}`,
-                                minHeight: `${rowSpan * ROW_HEIGHT}px`,
-                            }}
-                        >
-                            {/* Panel header */}
-                            <div className={`flex items-center justify-between px-3 py-1.5 border-b ${theme.border} bg-midnight-elevated`}>
-                                <span
-                                    className="flex-1 text-xs font-mono text-midnight-text-body truncate px-1"
-                                    style={{
-                                        textAlign: panel.config?.style?.titleAlign || 'left',
-                                        fontWeight: panel.config?.style?.titleBold ? 700 : undefined,
-                                        background: panel.config?.style?.titleBackground || undefined,
-                                        color: panel.config?.style?.titleColor || undefined,
-                                    }}
-                                >{panel.title || panel.type}</span>
-                                {canEditPanels && removePanel && (
-                                    <button
-                                        onClick={() => removePanel(panel.id)}
-                                        className="p-0.5 hover:bg-midnight-raised text-midnight-text-muted hover:text-midnight-text-body transition-colors"
-                                    >
-                                        <X className="w-3 h-3" />
-                                    </button>
-                                )}
-                            </div>
-                            {/* Panel content */}
-                            <div className="flex-1 min-h-0">
-                                <Suspense fallback={<ViewLoading />}>
-                                    <PanelContent panel={panel} records={records} columns={columns} />
-                                </Suspense>
-                            </div>
+            {/* Panel grid (draggable/resizable in the studio, static in the viewer) */}
+            <GridLayoutWithWidth
+                className="layout"
+                layout={layout}
+                cols={GRID_COLS}
+                rowHeight={ROW_HEIGHT}
+                margin={[GRID_MARGIN, GRID_MARGIN]}
+                isDraggable={canEditLayout}
+                isResizable={canEditLayout}
+                draggableHandle={`.${DRAG_HANDLE}`}
+                onDragStop={onLayoutChange}
+                onResizeStop={onLayoutChange}
+                // Editing → vertical-compact (no floating gaps). Viewer → null, so
+                // the published dashboard renders exactly where the studio left it.
+                compactType={canEditLayout ? 'vertical' : null}
+            >
+                {panels.map((panel) => (
+                    <div key={panel.id} className={`border ${theme.border} bg-midnight-surface flex flex-col overflow-hidden`}>
+                        {/* Panel header — also the drag handle when editing */}
+                        <div className={`flex items-center justify-between px-3 py-1.5 border-b ${theme.border} bg-midnight-elevated ${canEditLayout ? DRAG_HANDLE : ''}`}>
+                            <span
+                                className="flex-1 text-xs font-mono text-midnight-text-body truncate px-1"
+                                style={{
+                                    textAlign: panel.config?.style?.titleAlign || 'left',
+                                    fontWeight: panel.config?.style?.titleBold ? 700 : undefined,
+                                    background: panel.config?.style?.titleBackground || undefined,
+                                    color: panel.config?.style?.titleColor || undefined,
+                                }}
+                            >{panel.title || panel.type}</span>
+                            {canEditPanels && removePanel && (
+                                <button
+                                    // Stop drag from starting when the user aims for the X.
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onClick={() => removePanel(panel.id)}
+                                    className="p-0.5 hover:bg-midnight-raised text-midnight-text-muted hover:text-midnight-text-body transition-colors"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                            )}
                         </div>
-                    );
-                })}
-            </div>
+                        {/* Panel content */}
+                        <div className="flex-1 min-h-0">
+                            <Suspense fallback={<ViewLoading />}>
+                                <PanelContent panel={panel} records={records} columns={columns} />
+                            </Suspense>
+                        </div>
+                    </div>
+                ))}
+            </GridLayoutWithWidth>
         </div>
     );
 }

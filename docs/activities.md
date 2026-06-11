@@ -30,3 +30,32 @@ real columnar file rather than a JSON metadata blob.
 
 **Status:** deferred (future improvement). The inline model + 5000-row cap is the
 shipped behavior; this is the scale-up path for large precomputed results.
+
+## Adopt `@quantumwake/terminal-ux-components` for all form controls
+
+**Area:** every raw form control in the package — `ChartStyleControls`
+(slider/switch/color/select), `ChartBuilder` (`SelectControl`, `DropZone`
+pickers, `FiltersSection`, title input), `SqlConsole` chips, `DataExplorer` tabs.
+
+**Current state:** the package hand-rolls its controls with raw
+`<select>/<input>/<button>` styled with Tailwind to approximate the terminal
+look. A historical comment ("the package can't import the host's TerminalDropdown")
+predates the existence of the published **`@quantumwake/terminal-ux-components`**
+design system — which both hosts already depend on (publish-ui `^0.3.2`,
+ui-enterprise). So the coupling concern is moot: the package can depend on the
+design system directly.
+
+**Why it matters:** the hand-rolled controls drift from the rest of the ISM UI —
+spacing, toggles, and inputs look "jammed in" and off-brand (user feedback,
+2026-06-11). Consuming the shared primitives keeps the chart authoring UI visually
+identical to the Studio.
+
+**Proposed:** add `@quantumwake/terminal-ux-components` as a (peer?) dependency and
+replace the local `ColorControl/SliderControl/Switch/TextControl/Choice` +
+`SelectControl` with its primitives. Audit which primitives exist there first
+(dropdown, toggle, slider, color, text). Keep the package host-agnostic by relying
+only on the published design-system package, not on host-local components.
+
+**Status:** deferred — flagged by the user as the right direction but a big lift
+("revisit later"). Interim: `ChartStyleControls` was rebuilt with consistent
+rows + real sliders/switches (v0.1.14) so it's presentable until the migration.
