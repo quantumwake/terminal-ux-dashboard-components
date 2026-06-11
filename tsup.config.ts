@@ -16,6 +16,8 @@ export default defineConfig({
         '@nivo/scatterplot',
         '@nivo/heatmap',
         'react-pivottable',
+        '@uiw/react-codemirror',
+        '@codemirror/lang-sql',
     ],
     treeshake: true,
     splitting: false,

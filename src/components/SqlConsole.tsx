@@ -1,5 +1,7 @@
-import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Loader2, AlertCircle, Rows3, ChevronDown } from 'lucide-react';
+import CodeMirror, { keymap, Prec, EditorView } from '@uiw/react-codemirror';
+import { sql as sqlLang } from '@codemirror/lang-sql';
 import { useDashboard } from '../context/DashboardContext';
 import type { Row } from '../sqlgen';
 
@@ -82,9 +84,23 @@ export function SqlConsole({ columns = [], stateId, defaultColumnsOpen = false, 
         void run(defaultSql);
     }, [stateId, autoRun, defaultSql]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); void run(); }
-    };
+    // Keep the ⌘↵ keybinding pointed at the latest run closure without rebuilding
+    // the editor extensions on every keystroke.
+    const runRef = useRef<() => void>(() => {});
+    runRef.current = () => { void run(); };
+
+    // SQL language + schema-aware autocomplete: the table `data` and its columns
+    // complete as you type (and on ⌘/Ctrl-Space). Rebuilt only when the column set
+    // changes (keyed by name list) so typing doesn't reconfigure the editor.
+    const schemaKey = columns.map(c => c.name).join(',');
+    const extensions = useMemo(
+        () => [
+            sqlLang({ schema: { data: columns.map(c => c.name) }, upperCaseKeywords: true }),
+            EditorView.lineWrapping,
+            Prec.highest(keymap.of([{ key: 'Mod-Enter', run: () => { runRef.current(); return true; } }])),
+        ],
+        [schemaKey], // eslint-disable-line react-hooks/exhaustive-deps
+    );
 
     const resultColumns = result?.columns || [];
 
@@ -104,14 +120,15 @@ export function SqlConsole({ columns = [], stateId, defaultColumnsOpen = false, 
                         Run <span className="opacity-60">⌘↵</span>
                     </button>
                 </div>
-                <textarea
+                <CodeMirror
                     value={sql}
-                    onChange={e => setSql(e.target.value)}
-                    onKeyDown={onKeyDown}
-                    spellCheck={false}
-                    rows={5}
-                    className="w-full bg-midnight-surface border border-midnight-border px-3 py-2 text-sm font-mono outline-none text-midnight-text-body resize-y focus:border-midnight-accent transition-colors"
+                    onChange={setSql}
+                    extensions={extensions}
+                    theme="dark"
+                    basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
+                    height="120px"
                     placeholder="SELECT ... FROM data"
+                    className="border border-midnight-border text-sm overflow-hidden focus-within:border-midnight-accent"
                 />
                 {columns.length > 0 && (
                     <div className="mt-2">

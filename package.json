@@ -1,6 +1,6 @@
 {
   "name": "@quantumwake/terminal-ux-dashboard-components",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Dashboard, chart-builder and SQL-runner React components for the Alethic ISM apps. Capability-injected: the host wires the query/save/load/search fns. ui-enterprise is the source of truth; the published viewer omits the logged-in-only verbs (save/edit/load) and renders read-only.",
   "license": "MIT",
   "author": "quantumwake.io",
@@ -50,28 +50,32 @@
     "version:minor": "npm version minor && npm run release"
   },
   "peerDependencies": {
-    "react": ">=17.0.0",
-    "react-dom": ">=17.0.0",
-    "lucide-react": ">=0.4.0",
     "@nivo/bar": "^0.99.0",
+    "@nivo/heatmap": "^0.99.0",
     "@nivo/line": "^0.99.0",
     "@nivo/pie": "^0.99.0",
     "@nivo/scatterplot": "^0.99.0",
-    "@nivo/heatmap": "^0.99.0",
+    "lucide-react": ">=0.4.0",
+    "react": ">=17.0.0",
+    "react-dom": ">=17.0.0",
     "react-pivottable": ">=0.11.0"
   },
   "devDependencies": {
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "lucide-react": "^0.563.0",
     "@nivo/bar": "^0.99.0",
+    "@nivo/heatmap": "^0.99.0",
     "@nivo/line": "^0.99.0",
     "@nivo/pie": "^0.99.0",
     "@nivo/scatterplot": "^0.99.0",
-    "@nivo/heatmap": "^0.99.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "lucide-react": "^0.563.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "tsup": "^8.4.0",
     "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@codemirror/lang-sql": "^6.10.0",
+    "@uiw/react-codemirror": "^4.25.10"
   }
 }
