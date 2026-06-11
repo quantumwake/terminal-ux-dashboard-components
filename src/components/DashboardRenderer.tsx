@@ -10,8 +10,8 @@ import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } fr
 import { X, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
 
 import { useDashboard, useCapabilities } from '../context/DashboardContext';
-import { shapeChartData } from '../sqlgen';
-import type { Row, ChartType, ChartField } from '../sqlgen';
+import { shapeChartData, buildChartSQL } from '../sqlgen';
+import type { Row, ChartType, ChartField, ChartConfig, ChartFilter } from '../sqlgen';
 import type { ChartStyle } from '../chartStyle';
 import {
     BarView,
@@ -105,8 +105,50 @@ interface SqlPanelProps {
     panel: DashboardPanel;
 }
 
+// Chart types whose data buildChartSQL can compile from a panel's flat config —
+// so an AI-generated / Direct-mode panel (no config.sql) is still computed,
+// baked (precomputed), and refreshable, exactly like a manual SQL chart.
+const SQL_CHART_TYPES = new Set<string>(['bar', 'grouped-bar', 'pie', 'line', 'scatter', 'heatmap']);
+
+// Map a panel's flat config (group/value/agg/x/y/row/col — the AI/Direct shape)
+// to the ChartConfig buildChartSQL expects.
+function panelToChartConfig(chartType: ChartType, config: PanelConfig): ChartConfig {
+    const cfg: ChartConfig = { chartType, xFields: [], yFields: [], filters: (config.filters as ChartFilter[]) || [] };
+    switch (chartType) {
+        case 'bar':
+        case 'grouped-bar':
+            if (config.group) cfg.xFields = [{ name: config.group }];
+            cfg.yFields = config.yFields?.length
+                ? config.yFields
+                : config.value ? [{ name: config.value, agg: config.agg }] : [];
+            break;
+        case 'pie':
+            if (config.group) cfg.xFields = [{ name: config.group }];
+            break;
+        case 'line':
+        case 'scatter':
+            if (config.x) cfg.xFields = [{ name: config.x }];
+            if (config.y) cfg.yFields = [{ name: config.y }];
+            break;
+        case 'heatmap':
+            if (config.row) cfg.xFields = [{ name: config.row }];
+            if (config.col) cfg.yFields = [{ name: config.col }];
+            if (config.value) cfg.valueField = { name: config.value, agg: config.agg };
+            break;
+    }
+    return cfg;
+}
+
+// The SQL a panel runs: its explicit config.sql, else compiled from its config.
+function panelSql(chartType: ChartType, config: PanelConfig): string {
+    if (config.sql) return config.sql;
+    if (SQL_CHART_TYPES.has(chartType)) return buildChartSQL(panelToChartConfig(chartType, config)) || '';
+    return '';
+}
+
 /**
- * SqlPanel renders a SQL-backed panel (config.sql). PRECOMPUTE model:
+ * SqlPanel renders a SQL-backed panel (config.sql or a compiled chart config).
+ * PRECOMPUTE model:
  *   - config.data present  → render it directly (NO live query). This is how
  *     published dashboards render — instant, no dataset download.
  *   - config.data absent + studio (canRefresh) → live-query once to compute it.
@@ -124,6 +166,8 @@ function SqlPanel({ panel }: SqlPanelProps) {
     runQueryRef.current = runQuery;
     const config: PanelConfig = panel.config || {};
     const chartType = config.chartType || (panel.type as ChartType | 'metric');
+    // Explicit SQL, else compiled from the panel's chart config (AI/Direct panels).
+    const sql = panelSql(chartType as ChartType, config);
     const precomputed = config.data;
 
     const [rows, setRows] = useState<Row[] | null>(precomputed ?? null);
@@ -139,20 +183,20 @@ function SqlPanel({ panel }: SqlPanelProps) {
         let cancelled = false;
         setLoading(true);
         setError(null);
-        runQueryRef.current(config.sql || '').then(
+        runQueryRef.current(sql).then(
             (res) => { if (!cancelled) { setLoading(false); setRows(res?.rows || []); } },
             (err: unknown) => { if (!cancelled) { setLoading(false); setRows(null); setError(err instanceof Error ? err.message : String(err) || 'Query failed'); } },
         );
         return () => { cancelled = true; };
         // precomputed identity is intentionally excluded — a stored result is stable.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [config.sql, canRefresh]);
+    }, [sql, canRefresh]);
 
     const refresh = useCallback(async () => {
         setRefreshing(true);
         setError(null);
         try {
-            const res = await runQueryRef.current(config.sql || '');
+            const res = await runQueryRef.current(sql);
             const r = res?.rows || [];
             setRows(r);
             persistPanelData?.(panel.id, r, new Date().toISOString());
@@ -161,7 +205,7 @@ function SqlPanel({ panel }: SqlPanelProps) {
         } finally {
             setRefreshing(false);
         }
-    }, [config.sql, panel.id, persistPanelData]);
+    }, [sql, panel.id, persistPanelData]);
 
     const refreshBtn = canRefresh ? (
         <button
@@ -257,8 +301,11 @@ function PanelContent({ panel, records, columns }: PanelContentProps) {
     const { type } = panel;
     const config: PanelConfig = panel.config || {};
 
-    // SQL-backed panels fetch their own (full-dataset) data via runQuery.
-    if (config.sql) {
+    // SQL-backed panels — explicit config.sql OR a chart type we can compile from
+    // the config (so AI/Direct chart panels also compute, bake, and refresh
+    // server-side over the FULL dataset) — go through SqlPanel.
+    const effType = (config.chartType || type) as string;
+    if (config.sql || SQL_CHART_TYPES.has(effType)) {
         return <SqlPanel panel={panel} />;
     }
 
