@@ -1,5 +1,5 @@
-import { useState, type KeyboardEvent } from 'react';
-import { Play, Loader2, AlertCircle, Rows3 } from 'lucide-react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
+import { Play, Loader2, AlertCircle, Rows3, ChevronDown } from 'lucide-react';
 import { useDashboard } from '../context/DashboardContext';
 import type { Row } from '../sqlgen';
 
@@ -16,6 +16,14 @@ export interface SqlConsoleProps {
     columns?: SqlConsoleColumn[];
     // Optional state selector forwarded to runQuery (host may be multi-state).
     stateId?: string;
+    // Whether the column-chip list starts expanded. Defaults to false (collapsed)
+    // so the editor stays uncluttered; click "Columns (N)" to reveal the chips.
+    defaultColumnsOpen?: boolean;
+    // Initial editor query. Defaults to SELECT * FROM data LIMIT 100.
+    defaultSql?: string;
+    // Run the default query automatically on mount (and on stateId change) so the
+    // viewer shows rows immediately without a manual Run. Defaults to false.
+    autoRun?: boolean;
 }
 
 // Renders a single result cell value safely.
@@ -37,20 +45,24 @@ interface QueryState {
  * in the viewer) as a view named `data`; queries run against the entire dataset,
  * not a client sample.
  */
-export function SqlConsole({ columns = [], stateId }: SqlConsoleProps) {
+export function SqlConsole({ columns = [], stateId, defaultColumnsOpen = false, defaultSql = DEFAULT_SQL, autoRun = false }: SqlConsoleProps) {
     const { theme, runQuery } = useDashboard();
 
-    const [sql, setSql] = useState<string>(DEFAULT_SQL);
+    const [sql, setSql] = useState<string>(defaultSql);
     const [result, setResult] = useState<QueryState | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [running, setRunning] = useState<boolean>(false);
+    const [columnsOpen, setColumnsOpen] = useState<boolean>(defaultColumnsOpen);
 
-    const run = async (): Promise<void> => {
-        if (running || !sql.trim()) return;
+    // run executes `text` (defaults to the editor's current query). Passing the
+    // text explicitly lets auto-run fire the default query without waiting for the
+    // `sql` state to settle.
+    const run = async (text: string = sql): Promise<void> => {
+        if (running || !text.trim()) return;
         setRunning(true);
         setError(null);
         try {
-            const data = await runQuery(sql, stateId);
+            const data = await runQuery(text, stateId);
             setResult({ columns: data.columns || [], rows: data.rows || [] });
         } catch (err) {
             setResult(null);
@@ -59,6 +71,16 @@ export function SqlConsole({ columns = [], stateId }: SqlConsoleProps) {
             setRunning(false);
         }
     };
+
+    // Auto-run the default query on mount / state change so the viewer shows rows
+    // immediately. Only mounts once the host has materialized the data (the
+    // published viewer gates this behind its loader), so this never bypasses a
+    // download confirm. eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        if (!autoRun || !stateId) return;
+        setSql(defaultSql);
+        void run(defaultSql);
+    }, [stateId, autoRun, defaultSql]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); void run(); }
@@ -92,14 +114,23 @@ export function SqlConsole({ columns = [], stateId }: SqlConsoleProps) {
                     placeholder="SELECT ... FROM data"
                 />
                 {columns.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                        {columns.map(c => (
-                            <button key={c.name} title={`Insert ${c.name}`}
-                                onClick={() => setSql(s => `${s}${s.endsWith(' ') || s.endsWith('\n') || !s ? '' : ' '}${c.name}`)}
-                                className="px-1.5 py-0.5 border border-midnight-border text-[11px] font-mono text-midnight-text-muted hover:bg-midnight-raised transition-colors">
-                                {c.name}<span className="opacity-50 ml-1">{c.type}</span>
-                            </button>
-                        ))}
+                    <div className="mt-2">
+                        <button onClick={() => setColumnsOpen(o => !o)}
+                            className="flex items-center gap-1 text-[11px] font-mono text-midnight-text-muted hover:text-midnight-text-body transition-colors">
+                            <ChevronDown className={`w-3 h-3 transition-transform ${columnsOpen ? '' : '-rotate-90'}`} />
+                            Columns ({columns.length})
+                        </button>
+                        {columnsOpen && (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                                {columns.map(c => (
+                                    <button key={c.name} title={`Insert ${c.name}`}
+                                        onClick={() => setSql(s => `${s}${s.endsWith(' ') || s.endsWith('\n') || !s ? '' : ' '}${c.name}`)}
+                                        className="px-1.5 py-0.5 border border-midnight-border text-[11px] font-mono text-midnight-text-muted hover:bg-midnight-raised transition-colors">
+                                        {c.name}<span className="opacity-50 ml-1">{c.type}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

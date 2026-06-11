@@ -210,6 +210,13 @@ function ModeTab({ active, onClick, icon: Icon, label }: ModeTabProps) {
     );
 }
 
+// The available mode tabs, in display order. `tabs` filters this set.
+const MODE_TABS: { mode: Mode; icon: React.ComponentType<{ className?: string }>; label: string }[] = [
+    { mode: 'dashboard', icon: Sparkles, label: 'Dashboard' },
+    { mode: 'builder', icon: BarChart3, label: 'Chart Builder' },
+    { mode: 'sql', icon: Terminal, label: 'SQL' },
+];
+
 // ─── Main ─────────────────────────────────────────────────────────
 
 export interface DataExplorerProps {
@@ -233,6 +240,12 @@ export interface DataExplorerProps {
     loading?: boolean;
     /** True while the AI is generating/refining the dashboard. */
     analyzing?: boolean;
+    /** Initial mode tab. Defaults to 'dashboard'; the published viewer uses 'sql'
+     *  so the SQL console is the primary surface. Clamped to `tabs`. */
+    defaultMode?: Mode;
+    /** Which mode tabs to show, in order. Defaults to all three. Pass a subset to
+     *  turn tabs off (e.g. ['sql'] for a SQL-only explorer). */
+    tabs?: Mode[];
 
     /** Select a state (host fetches its profile/records). */
     onSelectState: (id: string) => void;
@@ -251,13 +264,16 @@ export function DataExplorer({
     savedDashboards = [],
     loading = false,
     analyzing = false,
+    defaultMode = 'dashboard',
+    tabs = ['dashboard', 'builder', 'sql'],
     onSelectState,
     onRefreshStates,
 }: DataExplorerProps) {
     const { theme, newDashboard, addPanel, saveDashboard, listDashboards, searchDashboards, loadDashboard, deleteDashboard, analyzeDataset, refineDashboard } = useDashboard();
     const caps = useCapabilities();
 
-    const [mode, setMode] = useState<Mode>('dashboard');
+    const visibleTabs = MODE_TABS.filter(t => tabs.includes(t.mode));
+    const [mode, setMode] = useState<Mode>(tabs.includes(defaultMode) ? defaultMode : tabs[0] ?? 'sql');
     const [fullscreen, setFullscreen] = useState(false);
     const [showSaved, setShowSaved] = useState(false);
     const [saveName, setSaveName] = useState('');
@@ -336,9 +352,9 @@ export function DataExplorer({
 
                     {/* Mode tabs + save/load */}
                     <div className="flex items-center gap-1 mb-3 shrink-0">
-                        <ModeTab active={mode === 'dashboard'} onClick={() => setMode('dashboard')} icon={Sparkles} label="Dashboard" />
-                        <ModeTab active={mode === 'builder'} onClick={() => setMode('builder')} icon={BarChart3} label="Chart Builder" />
-                        <ModeTab active={mode === 'sql'} onClick={() => setMode('sql')} icon={Terminal} label="SQL" />
+                        {visibleTabs.map(t => (
+                            <ModeTab key={t.mode} active={mode === t.mode} onClick={() => setMode(t.mode)} icon={t.icon} label={t.label} />
+                        ))}
 
                         {caps.canNew && (
                             <button onClick={() => { newDashboard?.(); setMode('builder'); }} title="Start a new dashboard"
