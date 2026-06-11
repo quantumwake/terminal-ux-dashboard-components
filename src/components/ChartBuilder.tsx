@@ -426,6 +426,16 @@ type Zone = 'x' | 'y' | 'value' | 'group' | 'color';
  * runQuery + theme via <DashboardProvider>; an optional onSave persists the
  * assembled panel (absent ⇒ the save affordance is hidden / read-only).
  */
+// Cap on rows baked onto a panel as precomputed data (config.data, inlined into
+// the dashboard JSON / published manifest). Aggregations are tiny; this guards
+// against baking a scatter-of-everything (those stay live/Refresh-only).
+// TODO(precompute-parquet): for larger results, back the precomputed output with
+// a small RESULT PARQUET (written next to the snapshot) referenced by the panel
+// (e.g. config.dataKey) and loaded via DuckDB-WASM, instead of inlining rows in
+// the metadata JSON — keeps the manifest small and the result database-backed.
+// See docs/activities.md.
+const MAX_PRECOMPUTE_ROWS = 5000;
+
 export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilderProps) {
     const { theme, runQuery } = useDashboard();
     // Hold runQuery in a ref so effects don't depend on its identity — hosts
@@ -553,6 +563,14 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
             config.chartType = chartType; // shaping hint for the renderer
             if (filters.length) config.filters = filters;
             if (yFields.length) config.yFields = yFields.map((f) => ({ name: f.name, agg: f.agg }));
+            // PRECOMPUTE: bake the current preview result onto the panel so it
+            // renders without a live query (instant in the studio, and carried into
+            // published dashboards verbatim). Skip oversized results (e.g. a
+            // scatter of every row) — those stay live/Refresh-only.
+            if (sqlRows && sqlRows.length <= MAX_PRECOMPUTE_ROWS) {
+                config.data = sqlRows;
+                config.refreshedAt = new Date().toISOString();
+            }
         }
 
         // Standardized appearance travels with the panel.

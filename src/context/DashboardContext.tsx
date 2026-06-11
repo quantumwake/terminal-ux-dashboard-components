@@ -77,6 +77,14 @@ export interface DashboardCapabilities {
 
     // OPTIONAL — editing (studio-only). Absent ⇒ panels are read-only.
     removePanel?: (panelId: string) => void;
+
+    // OPTIONAL — persist a panel's PRECOMPUTED result (studio-only). When wired,
+    // SQL-backed panels show a Refresh button: refresh runs runQuery and hands the
+    // result rows back here so the host stores them on the panel (config.data) and
+    // saves. Published dashboards are then rendered from that stored result — no
+    // live query, no dataset download. Absent ⇒ no Refresh; panels are pure
+    // precomputed-or-unavailable (the published viewer).
+    persistPanelData?: (panelId: string, rows: QueryResult['rows'], refreshedAt: string) => void;
 }
 
 export interface DashboardContextValue extends DashboardCapabilities {
@@ -121,5 +129,7 @@ export function useCapabilities() {
         canNew: !!c.newDashboard,
         canAddPanel: !!c.addPanel,
         canEditPanels: !!c.removePanel,
+        // Studio can recompute + persist a panel's precomputed result.
+        canRefresh: !!c.persistPanelData,
     };
 }

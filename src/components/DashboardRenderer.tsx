@@ -6,8 +6,8 @@
 //   - studio (ui-enterprise): wires removePanel ⇒ panels show a remove button.
 //   - published viewer (publish-ui): omits removePanel ⇒ read-only dashboard.
 
-import { Suspense, useEffect, useRef, useState } from 'react';
-import { X, Sparkles } from 'lucide-react';
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { X, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
 
 import { useDashboard, useCapabilities } from '../context/DashboardContext';
 import { shapeChartData } from '../sqlgen';
@@ -58,6 +58,12 @@ export interface PanelConfig {
     label?: string;
     column?: string;
 
+    // PRECOMPUTED result of config.sql, baked at build/refresh time. When present
+    // the panel renders from it directly — no live query. refreshedAt is when it
+    // was last computed (studio Refresh). Published dashboards rely on this.
+    data?: Row[];
+    refreshedAt?: string;
+
     [key: string]: unknown;
 }
 
@@ -100,82 +106,138 @@ interface SqlPanelProps {
 }
 
 /**
- * SqlPanel renders a panel whose config carries a server-side SQL query
- * (config.sql), running it against the full dataset (via the host's runQuery)
- * and shaping the result for the chart view. Query errors are kept in LOCAL
- * state (the host's runQuery just resolves/rejects).
+ * SqlPanel renders a SQL-backed panel (config.sql). PRECOMPUTE model:
+ *   - config.data present  → render it directly (NO live query). This is how
+ *     published dashboards render — instant, no dataset download.
+ *   - config.data absent + studio (canRefresh) → live-query once to compute it.
+ *   - config.data absent + read-only viewer → "Chart data not available" (the
+ *     viewer never live-queries a dashboard panel — that's a dataset download).
+ * The studio shows a Refresh button that re-runs the query and hands the rows to
+ * persistPanelData so the host stores them on the panel and saves.
  */
 function SqlPanel({ panel }: SqlPanelProps) {
-    const { runQuery } = useDashboard();
+    const { runQuery, persistPanelData } = useDashboard();
+    const { canRefresh } = useCapabilities();
     // Ref so the query effect doesn't depend on runQuery's identity (hosts pass
     // an inline runQuery → depending on it would loop). See ChartBuilder.
     const runQueryRef = useRef(runQuery);
     runQueryRef.current = runQuery;
     const config: PanelConfig = panel.config || {};
     const chartType = config.chartType || (panel.type as ChartType | 'metric');
+    const precomputed = config.data;
 
-    const [rows, setRows] = useState<Row[] | null>(null);
+    const [rows, setRows] = useState<Row[] | null>(precomputed ?? null);
     const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState<boolean>(!precomputed && canRefresh);
+    const [refreshing, setRefreshing] = useState(false);
 
+    // Compute live ONLY when there's no precomputed result and the host can persist
+    // (studio first-build). The published viewer relies solely on config.data.
     useEffect(() => {
+        if (precomputed) { setRows(precomputed); setLoading(false); return; }
+        if (!canRefresh) { setLoading(false); return; }
         let cancelled = false;
         setLoading(true);
         setError(null);
-        const sql = config.sql || '';
-        runQueryRef.current(sql).then(
-            (res) => {
-                if (cancelled) return;
-                setLoading(false);
-                setRows(res?.rows || []);
-            },
-            (err: unknown) => {
-                if (cancelled) return;
-                setLoading(false);
-                setRows(null);
-                setError(err instanceof Error ? err.message : String(err) || 'Query failed');
-            },
+        runQueryRef.current(config.sql || '').then(
+            (res) => { if (!cancelled) { setLoading(false); setRows(res?.rows || []); } },
+            (err: unknown) => { if (!cancelled) { setLoading(false); setRows(null); setError(err instanceof Error ? err.message : String(err) || 'Query failed'); } },
         );
         return () => { cancelled = true; };
-    }, [config.sql]);
+        // precomputed identity is intentionally excluded — a stored result is stable.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [config.sql, canRefresh]);
+
+    const refresh = useCallback(async () => {
+        setRefreshing(true);
+        setError(null);
+        try {
+            const res = await runQueryRef.current(config.sql || '');
+            const r = res?.rows || [];
+            setRows(r);
+            persistPanelData?.(panel.id, r, new Date().toISOString());
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : String(err) || 'Query failed');
+        } finally {
+            setRefreshing(false);
+        }
+    }, [config.sql, panel.id, persistPanelData]);
+
+    const refreshBtn = canRefresh ? (
+        <button
+            onClick={refresh}
+            disabled={refreshing}
+            title={config.refreshedAt ? `Last computed ${new Date(config.refreshedAt).toLocaleString()} — click to refresh` : 'Compute & save this chart’s data'}
+            className="absolute top-1 right-1 z-10 p-1 bg-midnight-elevated/80 border border-midnight-border text-midnight-text-muted hover:text-midnight-accent transition-colors"
+        >
+            <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
+    ) : null;
 
     if (loading && !rows) {
         return <div className="flex items-center justify-center h-full text-xs text-midnight-text-muted">Running…</div>;
     }
+    // No precomputed result and read-only viewer: don't live-query — surface it.
+    if (!rows && !error && !canRefresh) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full gap-1 px-2 text-center text-xs text-midnight-text-muted">
+                <AlertCircle className="w-4 h-4" />
+                <span>Chart data not available</span>
+                <span className="text-[10px] text-midnight-text-subdued">Download the dataset to view this chart.</span>
+            </div>
+        );
+    }
     if (error) {
-        return <div className="flex items-center justify-center h-full text-xs text-red-400 px-2 text-center">{error}</div>;
+        return (
+            <div className="relative flex items-center justify-center h-full px-2 text-center text-xs text-red-400">
+                {refreshBtn}
+                {error}
+            </div>
+        );
     }
     if (!rows) return null;
 
+    let chart: ReactNode;
     if (chartType === 'metric') {
         const first = rows[0];
         const v = first ? Object.values(first)[0] : 0;
-        return <MetricView value={Number(v) || 0} config={{ column: config.column || '', agg: config.agg, label: config.label }} />;
+        chart = <MetricView value={Number(v) || 0} config={{ column: config.column || '', agg: config.agg, label: config.label }} />;
+    } else {
+        const shaped = shapeChartData(chartType, rows, { yFields: config.yFields || [] });
+        switch (chartType) {
+            case 'bar':
+                chart = <BarView data={shaped as never} groupColumn={config.group || ''} valueColumn={config.value || ''} style={config.style} />;
+                break;
+            case 'grouped-bar': {
+                const gb = shaped as { data: unknown[]; keys: string[] };
+                chart = <GroupedBarChart data={gb.data as never} keys={gb.keys} yFields={config.yFields || []} style={config.style} />;
+                break;
+            }
+            case 'pie':
+                chart = <PieView data={shaped as never} groupColumn={config.group || ''} style={config.style} />;
+                break;
+            case 'line':
+                chart = <LineView data={shaped as never} xColumn={config.x || ''} yColumn={config.y || ''} style={config.style} />;
+                break;
+            case 'scatter':
+                chart = <ScatterView data={shaped as never} xColumn={config.x || ''} yColumn={config.y || ''} style={config.style} />;
+                break;
+            case 'heatmap':
+                chart = (shaped as unknown[]).length
+                    ? <HeatmapView data={shaped as never} rowColumn={config.row || ''} colColumn={config.col || ''} rowOrder={config.rowOrder as never} colOrder={config.colOrder as never} marginAgg={config.marginAgg} showTotals={config.showTotals} style={config.style} />
+                    : <div className="flex items-center justify-center h-full text-xs text-midnight-text-muted">No data</div>;
+                break;
+            default:
+                chart = <div className="p-4 text-xs text-midnight-text-muted">Unsupported SQL chart: {chartType}</div>;
+        }
     }
 
-    const shaped = shapeChartData(chartType, rows, { yFields: config.yFields || [] });
-    switch (chartType) {
-        case 'bar':
-            return <BarView data={shaped as never} groupColumn={config.group || ''} valueColumn={config.value || ''} style={config.style} />;
-        case 'grouped-bar': {
-            // Preset data + keys from the SQL result; groupField is only used for
-            // the client-side computation path, so it is irrelevant here.
-            const gb = shaped as { data: unknown[]; keys: string[] };
-            return <GroupedBarChart data={gb.data as never} keys={gb.keys} yFields={config.yFields || []} style={config.style} />;
-        }
-        case 'pie':
-            return <PieView data={shaped as never} groupColumn={config.group || ''} style={config.style} />;
-        case 'line':
-            return <LineView data={shaped as never} xColumn={config.x || ''} yColumn={config.y || ''} style={config.style} />;
-        case 'scatter':
-            return <ScatterView data={shaped as never} xColumn={config.x || ''} yColumn={config.y || ''} style={config.style} />;
-        case 'heatmap':
-            return (shaped as unknown[]).length
-                ? <HeatmapView data={shaped as never} rowColumn={config.row || ''} colColumn={config.col || ''} rowOrder={config.rowOrder as never} colOrder={config.colOrder as never} marginAgg={config.marginAgg} showTotals={config.showTotals} style={config.style} />
-                : <div className="flex items-center justify-center h-full text-xs text-midnight-text-muted">No data</div>;
-        default:
-            return <div className="p-4 text-xs text-midnight-text-muted">Unsupported SQL chart: {chartType}</div>;
-    }
+    return (
+        <div className="relative h-full w-full">
+            {refreshBtn}
+            {chart}
+        </div>
+    );
 }
 
 // ─── PanelContent ──────────────────────────────────────────────────────────
