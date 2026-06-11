@@ -126,8 +126,8 @@ export function HeatmapView({
             <ResponsiveHeatMap
                 data={data as never}
                 margin={margin}
-                axisTop={{ tickSize: 5, tickPadding: 5, tickRotation: -35, legend: colColumn, legendPosition: s.xLegendPosition, legendOffset: -50 }}
-                axisLeft={{ tickSize: 5, tickPadding: 5, legend: rowColumn, legendPosition: s.yLegendPosition, legendOffset: -80 }}
+                axisTop={{ tickSize: 5, tickPadding: 5, tickRotation: s.xTickRotation, legend: s.showXLegend ? (s.xAxisLabel || colColumn) : '', legendPosition: s.xLegendPosition, legendOffset: -50 }}
+                axisLeft={{ tickSize: 5, tickPadding: 5, legend: s.showYLegend ? (s.yAxisLabel || rowColumn) : '', legendPosition: s.yLegendPosition, legendOffset: -80 }}
                 axisRight={showTotals ? { tickSize: 5, tickPadding: 5, format: (id) => fmtNum(rowTotals[id as string]), legend: `${marginAgg} ▸`, legendOffset: 60 } : null}
                 axisBottom={showTotals ? { tickSize: 5, tickPadding: 5, tickRotation: -35, format: (id) => fmtNum(colTotals[id as string]) } : null}
                 colors={{ type: 'sequential', scheme: 'blue_green', minValue: 0 }}

@@ -139,9 +139,15 @@ export const buildChartSQL = ({
         }
         case 'scatter': {
             if (!x || !y) return null;
-            const w = where ? `${where} AND ${qIdent(x)} IS NOT NULL AND ${qIdent(y)} IS NOT NULL`
-                : ` WHERE ${qIdent(x)} IS NOT NULL AND ${qIdent(y)} IS NOT NULL`;
-            return `SELECT ${qIdent(x)} AS x, ${qIdent(y)} AS y FROM ${TABLE}${w} LIMIT ${MAX_POINTS}`;
+            // Scatter is numeric-on-numeric. statefs stores VARCHAR, so coerce
+            // both axes with TRY_CAST and keep only rows where BOTH coerce to a
+            // number — non-numeric/empty cells become NULL and are filtered out
+            // (instead of silently plotting at 0). DOUBLE (not the aggregate
+            // DECIMAL) avoids fixed-scale clamping of raw point values.
+            const nx = `TRY_CAST(${qIdent(x)} AS DOUBLE)`, ny = `TRY_CAST(${qIdent(y)} AS DOUBLE)`;
+            const extra = `${nx} IS NOT NULL AND ${ny} IS NOT NULL`;
+            const w = where ? `${where} AND ${extra}` : ` WHERE ${extra}`;
+            return `SELECT ${nx} AS x, ${ny} AS y FROM ${TABLE}${w} LIMIT ${MAX_POINTS}`;
         }
         case 'heatmap': {
             if (!x || !y) return null;
@@ -177,7 +183,14 @@ export const shapeChartData = (
         case 'line':
             return [{ id: 'series', data: rows.map((r) => ({ x: String(r.x), y: Number(r.y) || 0 })) }];
         case 'scatter':
-            return [{ id: 'points', data: rows.map((r) => ({ x: Number(r.x) || 0, y: Number(r.y) || 0 })) }];
+            // Keep only finite numeric points (the SQL already coerces + filters,
+            // but guard the client path too — never collapse bad cells onto 0).
+            return [{
+                id: 'points',
+                data: rows
+                    .map((r) => ({ x: Number(r.x), y: Number(r.y) }))
+                    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y)),
+            }];
         case 'heatmap': {
             // Pivot flat (r, c, v) rows into the Nivo heatmap series shape. Order
             // and capping are applied downstream by HeatmapView (which also draws

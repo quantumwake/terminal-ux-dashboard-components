@@ -22,9 +22,13 @@ export interface ScatterViewProps {
 export function ScatterView({ records, xColumn, yColumn, data: presetData, style }: ScatterViewProps) {
     const computed = useMemo<ScatterSerie[]>(() => {
         if (presetData || !records) return [];
+        // Scatter axes are both numeric (linear scales). Coerce, then DROP any
+        // point whose x or y isn't a finite number — coercing non-numeric cells
+        // to 0 (the old behaviour) collapsed them onto the origin/axes and
+        // produced a misleading plot.
         const points = records
-            .filter((r) => r[xColumn] != null && r[yColumn] != null)
-            .map((r) => ({ x: Number(r[xColumn]) || 0, y: Number(r[yColumn]) || 0 }))
+            .map((r) => ({ x: Number(r[xColumn]), y: Number(r[yColumn]) }))
+            .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
             .slice(0, 1000);
 
         return [{ id: `${xColumn} vs ${yColumn}`, data: points }];
@@ -40,8 +44,8 @@ export function ScatterView({ records, xColumn, yColumn, data: presetData, style
                 yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
                 colors={['rgba(167, 139, 250, 0.7)']}
                 nodeSize={6}
-                axisBottom={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'x', xColumn) }}
-                axisLeft={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'y', yColumn) }}
+                axisBottom={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'x', xColumn, { numeric: true }) }}
+                axisLeft={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'y', yColumn, { numeric: true }) }}
                 useMesh={true}
                 theme={buildNivoTheme(style)}
             />

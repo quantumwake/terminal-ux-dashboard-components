@@ -467,6 +467,7 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
     // Standardized chart appearance (see chartStyle.ts).
     const [style, setStyle] = useState<ChartStyle>(DEFAULT_CHART_STYLE);
     const [showStyle, setShowStyle] = useState(false);
+    const [showFields, setShowFields] = useState(false);
 
     // SQL preview state (driven by runQuery when engineMode === 'sql').
     const [sqlRows, setSqlRows] = useState<Row[] | null>(null);
@@ -751,17 +752,24 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
                     </div>
                 )}
 
-                {/* Available Fields (reference) */}
+                {/* Available Fields (reference) — collapsed by default */}
                 <div className="pt-4 border-t border-midnight-border">
-                    <div className="text-xs uppercase text-midnight-text-muted mb-2 font-mono">Available Fields</div>
-                    <div className="space-y-1">
-                        {columns.map((col) => (
-                            <div key={col.name} className="flex items-center justify-between text-xs font-mono px-1 py-0.5">
-                                <span className="text-midnight-text-body">{col.name}</span>
-                                <span className="text-midnight-text-muted">{col.type}</span>
-                            </div>
-                        ))}
-                    </div>
+                    <button onClick={() => setShowFields((s) => !s)}
+                        className="flex items-center gap-1 text-xs uppercase text-midnight-text-muted font-mono hover:text-midnight-text-body transition-colors">
+                        <ChevronDown className={`w-3 h-3 transition-transform ${showFields ? '' : '-rotate-90'}`} />
+                        Available Fields
+                        <span className="text-midnight-text-muted/60 normal-case">({columns.length})</span>
+                    </button>
+                    {showFields && (
+                        <div className="space-y-1 mt-2">
+                            {columns.map((col) => (
+                                <div key={col.name} className="flex items-center justify-between text-xs font-mono px-1 py-0.5">
+                                    <span className="text-midnight-text-body">{col.name}</span>
+                                    <span className="text-midnight-text-muted">{col.type}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 

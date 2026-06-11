@@ -10,7 +10,7 @@ import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } fr
 import { X, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
 
 import { useDashboard, useCapabilities } from '../context/DashboardContext';
-import { shapeChartData, buildChartSQL } from '../sqlgen';
+import { shapeChartData, buildChartSQL, aggExpr, qIdent } from '../sqlgen';
 import type { Row, ChartType, ChartField, ChartConfig, ChartFilter } from '../sqlgen';
 import type { ChartStyle } from '../chartStyle';
 import {
@@ -110,6 +110,27 @@ interface SqlPanelProps {
 // baked (precomputed), and refreshable, exactly like a manual SQL chart.
 const SQL_CHART_TYPES = new Set<string>(['bar', 'grouped-bar', 'pie', 'line', 'scatter', 'heatmap']);
 
+// Panel types that are SQL-backed but NOT compiled via buildChartSQL: table
+// (row preview) and metric (single aggregate). Routing them through SqlPanel
+// gives them the same Refresh + precompute (bake) path as the charts — so AI/
+// Direct table & metric panels also show data on publish.
+const SQL_DATA_TYPES = new Set<string>(['table', 'metric']);
+
+// Rows fetched/baked for a table panel preview (kept small — it's a glance, and
+// it inlines into the dashboard/published manifest like any precomputed result).
+const TABLE_PREVIEW_ROWS = 200;
+
+// SQL for a table panel: the chosen columns (or all) capped to a preview size.
+function tableSql(config: PanelConfig): string {
+    const cols = config.columns?.length ? config.columns.map(qIdent).join(', ') : '*';
+    return `SELECT ${cols} FROM data LIMIT ${TABLE_PREVIEW_ROWS}`;
+}
+
+// SQL for a metric panel: a single aggregate over the full dataset.
+function metricSql(config: PanelConfig): string {
+    return `SELECT ${aggExpr(config.agg, config.column)} AS v FROM data`;
+}
+
 // Map a panel's flat config (group/value/agg/x/y/row/col — the AI/Direct shape)
 // to the ChartConfig buildChartSQL expects.
 function panelToChartConfig(chartType: ChartType, config: PanelConfig): ChartConfig {
@@ -139,11 +160,42 @@ function panelToChartConfig(chartType: ChartType, config: PanelConfig): ChartCon
     return cfg;
 }
 
-// The SQL a panel runs: its explicit config.sql, else compiled from its config.
-function panelSql(chartType: ChartType, config: PanelConfig): string {
+// The SQL a panel runs: its explicit config.sql, else compiled from its config
+// (charts), or built for table / metric panels.
+function panelSql(type: string, config: PanelConfig): string {
     if (config.sql) return config.sql;
-    if (SQL_CHART_TYPES.has(chartType)) return buildChartSQL(panelToChartConfig(chartType, config)) || '';
+    if (type === 'table') return tableSql(config);
+    if (type === 'metric') return metricSql(config);
+    if (SQL_CHART_TYPES.has(type)) return buildChartSQL(panelToChartConfig(type as ChartType, config)) || '';
     return '';
+}
+
+// A compact scrollable table for table panels (and the records fallback).
+function DataTable({ rows, columns }: { rows: Row[]; columns?: string[] }) {
+    const colNames = columns?.length ? columns : rows[0] ? Object.keys(rows[0]) : [];
+    return (
+        <div className="overflow-auto h-full text-xs">
+            <table className="w-full">
+                <thead className="sticky top-0 bg-midnight-elevated">
+                    <tr>{colNames.map((n) => <th key={n} className="px-2 py-1 text-left text-midnight-text-muted font-mono border-b border-midnight-border">{n}</th>)}</tr>
+                </thead>
+                <tbody>
+                    {rows.map((r, i) => (
+                        <tr key={i} className="border-b border-dashed border-midnight-border hover:bg-midnight-raised">
+                            {colNames.map((n) => {
+                                const cellValue = r[n];
+                                return (
+                                    <td key={n} className="px-2 py-1 text-midnight-text-body truncate max-w-[200px]">
+                                        {cellValue == null ? '' : typeof cellValue === 'object' ? JSON.stringify(cellValue) : String(cellValue)}
+                                    </td>
+                                );
+                            })}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
 }
 
 /**
@@ -165,9 +217,9 @@ function SqlPanel({ panel }: SqlPanelProps) {
     const runQueryRef = useRef(runQuery);
     runQueryRef.current = runQuery;
     const config: PanelConfig = panel.config || {};
-    const chartType = config.chartType || (panel.type as ChartType | 'metric');
-    // Explicit SQL, else compiled from the panel's chart config (AI/Direct panels).
-    const sql = panelSql(chartType as ChartType, config);
+    const chartType = (config.chartType || panel.type) as string;
+    // Explicit SQL, else compiled from the panel's chart/table/metric config.
+    const sql = panelSql(chartType, config);
     const precomputed = config.data;
 
     const [rows, setRows] = useState<Row[] | null>(precomputed ?? null);
@@ -246,8 +298,10 @@ function SqlPanel({ panel }: SqlPanelProps) {
         const first = rows[0];
         const v = first ? Object.values(first)[0] : 0;
         chart = <MetricView value={Number(v) || 0} config={{ column: config.column || '', agg: config.agg, label: config.label }} />;
+    } else if (chartType === 'table') {
+        chart = <DataTable rows={rows} columns={config.columns} />;
     } else {
-        const shaped = shapeChartData(chartType, rows, { yFields: config.yFields || [] });
+        const shaped = shapeChartData(chartType as ChartType, rows, { yFields: config.yFields || [] });
         switch (chartType) {
             case 'bar':
                 chart = <BarView data={shaped as never} groupColumn={config.group || ''} valueColumn={config.value || ''} style={config.style} />;
@@ -301,11 +355,11 @@ function PanelContent({ panel, records, columns }: PanelContentProps) {
     const { type } = panel;
     const config: PanelConfig = panel.config || {};
 
-    // SQL-backed panels — explicit config.sql OR a chart type we can compile from
-    // the config (so AI/Direct chart panels also compute, bake, and refresh
-    // server-side over the FULL dataset) — go through SqlPanel.
+    // SQL-backed panels — explicit config.sql, a compilable chart type, or a
+    // table/metric panel — go through SqlPanel so they compute, bake (precompute),
+    // and refresh server-side over the FULL dataset (and show data on publish).
     const effType = (config.chartType || type) as string;
-    if (config.sql || SQL_CHART_TYPES.has(effType)) {
+    if (config.sql || SQL_CHART_TYPES.has(effType) || SQL_DATA_TYPES.has(effType)) {
         return <SqlPanel panel={panel} />;
     }
 
@@ -330,36 +384,9 @@ function PanelContent({ panel, records, columns }: PanelContentProps) {
             return <MetricView records={records} config={{ column: config.column || '', agg: config.agg, label: config.label }} />;
         case 'insight':
             return <InsightView config={{ text: config.text }} />;
-        case 'table': {
-            const cols = config.columns
-                ? config.columns.map((c) => ({ name: c }))
-                : columns;
-            // Inline simple table for dashboard panels.
-            const colNames = cols?.map((c) => c.name) || (records && records[0] ? Object.keys(records[0]) : []);
-            return (
-                <div className="overflow-auto h-full text-xs">
-                    <table className="w-full">
-                        <thead className="sticky top-0 bg-midnight-elevated">
-                            <tr>{colNames.map((n) => <th key={n} className="px-2 py-1 text-left text-midnight-text-muted font-mono border-b border-midnight-border">{n}</th>)}</tr>
-                        </thead>
-                        <tbody>
-                            {(records || []).slice(0, 50).map((r, i) => (
-                                <tr key={i} className="border-b border-dashed border-midnight-border hover:bg-midnight-raised">
-                                    {colNames.map((n) => {
-                                        const cellValue = r[n];
-                                        return (
-                                            <td key={n} className="px-2 py-1 text-midnight-text-body truncate max-w-[200px]">
-                                                {cellValue == null ? '' : typeof cellValue === 'object' ? JSON.stringify(cellValue) : String(cellValue)}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            );
-        }
+        case 'table':
+            // Records fallback (SQL-backed tables route through SqlPanel above).
+            return <DataTable rows={(records || []).slice(0, 50)} columns={config.columns || columns?.map((c) => c.name)} />;
         default:
             return <div className="p-4 text-xs text-midnight-text-muted">Unknown panel type: {type}</div>;
     }
@@ -407,7 +434,15 @@ export function DashboardRenderer({ dashboard, records, columns }: DashboardRend
                         >
                             {/* Panel header */}
                             <div className={`flex items-center justify-between px-3 py-1.5 border-b ${theme.border} bg-midnight-elevated`}>
-                                <span className="flex-1 text-xs font-mono text-midnight-text-body truncate" style={{ textAlign: panel.config?.style?.titleAlign || 'left' }}>{panel.title || panel.type}</span>
+                                <span
+                                    className="flex-1 text-xs font-mono text-midnight-text-body truncate px-1"
+                                    style={{
+                                        textAlign: panel.config?.style?.titleAlign || 'left',
+                                        fontWeight: panel.config?.style?.titleBold ? 700 : undefined,
+                                        background: panel.config?.style?.titleBackground || undefined,
+                                        color: panel.config?.style?.titleColor || undefined,
+                                    }}
+                                >{panel.title || panel.type}</span>
                                 {canEditPanels && removePanel && (
                                     <button
                                         onClick={() => removePanel(panel.id)}

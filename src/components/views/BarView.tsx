@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { ResponsiveBar } from '@nivo/bar';
 
 import { groupBy, aggregate } from '../../dataShape';
-import { buildNivoTheme } from '../../chartStyle';
+import { buildNivoTheme, axisLegend } from '../../chartStyle';
 import type { ChartStyle } from '../../chartStyle';
 import type { Row } from '../../sqlgen';
 
@@ -42,8 +42,8 @@ export function BarView({ records, groupColumn, valueColumn, aggFn = 'count', da
                 padding={0.3}
                 colors={['rgba(74, 222, 128, 0.8)']}
                 borderColor={{ from: 'color', modifiers: [['darker', 1.6]] } as never}
-                axisBottom={{ tickSize: 5, tickPadding: 5, tickRotation: -35 }}
-                axisLeft={{ tickSize: 5, tickPadding: 5, format: (v) => Number(v).toLocaleString() }}
+                axisBottom={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'x', groupColumn) }}
+                axisLeft={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'y', valueColumn, { numeric: true }) }}
                 labelSkipWidth={12}
                 labelSkipHeight={12}
                 labelTextColor={{ from: 'color', modifiers: [['darker', 3]] } as never}

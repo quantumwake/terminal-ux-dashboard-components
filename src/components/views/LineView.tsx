@@ -54,8 +54,8 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
                 pointBorderWidth={2}
                 pointBorderColor={{ from: 'serieColor' }}
                 enableGridX={false}
-                axisBottom={{ tickSize: 5, tickPadding: 5, tickRotation: -35, ...axisLegend(style, 'x', xColumn) }}
-                axisLeft={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'y', yColumn) }}
+                axisBottom={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'x', xColumn) }}
+                axisLeft={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'y', yColumn, { numeric: true }) }}
                 useMesh={true}
                 theme={buildNivoTheme(style)}
             />

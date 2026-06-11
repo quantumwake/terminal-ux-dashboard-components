@@ -18,12 +18,30 @@ export interface ChartStyle {
     gridColor: string;
     tooltipBg: string;
     tooltipColor: string;
+    // Axis titles (legends): position along the axis + distance from it.
     xLegendPosition: LegendPosition;
     xLegendOffset: number;
     yLegendPosition: LegendPosition;
     yLegendOffset: number;
+    // Custom axis title text ('' ⇒ fall back to the column name) + show/hide.
+    xAxisLabel: string;
+    yAxisLabel: string;
+    showXLegend: boolean;
+    showYLegend: boolean;
+    // Axis title emphasis: bold weight + a highlight halo (outline) colour.
+    legendBold: boolean;
+    legendHighlight: string; // '' ⇒ no halo
+    // Tick handling (overflow): rotate the x ticks, truncate long categorical
+    // tick labels to N chars with an ellipsis (0 ⇒ off).
+    xTickRotation: number;
+    tickTruncate: number;
+    // Series legend placement (charts that have one: pie, grouped bar).
     legendAnchor: LegendAnchor;
+    // Panel title (rendered as HTML by DashboardRenderer's header).
     titleAlign: TitleAlign;
+    titleBold: boolean;
+    titleBackground: string; // '' ⇒ transparent
+    titleColor: string; // '' ⇒ inherit
 }
 
 export const DEFAULT_CHART_STYLE: ChartStyle = {
@@ -39,10 +57,24 @@ export const DEFAULT_CHART_STYLE: ChartStyle = {
     xLegendOffset: 46,
     yLegendPosition: 'middle',
     yLegendOffset: -50,
+    // Custom axis title text + visibility.
+    xAxisLabel: '',
+    yAxisLabel: '',
+    showXLegend: true,
+    showYLegend: true,
+    // Axis title emphasis.
+    legendBold: false,
+    legendHighlight: '',
+    // Tick overflow handling.
+    xTickRotation: -35,
+    tickTruncate: 0,
     // Series legend placement (charts that have one: pie, grouped bar).
     legendAnchor: 'right',
-    // Panel title alignment (rendered by DashboardRenderer's panel header).
+    // Panel title (rendered by DashboardRenderer's panel header).
     titleAlign: 'left',
+    titleBold: false,
+    titleBackground: '',
+    titleColor: '',
 };
 
 export const LEGEND_ANCHORS: LegendAnchor[] = ['right', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'none'];
@@ -61,7 +93,17 @@ export const buildNivoTheme = (style?: Partial<ChartStyle> | null) => {
         text: { fill: s.textColor, fontSize: s.fontSize },
         axis: {
             ticks: { text: { fill: s.textColor, fontSize: s.fontSize } },
-            legend: { text: { fill: s.legendColor, fontSize: s.fontSize + 2 } },
+            legend: {
+                text: {
+                    fill: s.legendColor,
+                    fontSize: s.fontSize + 2,
+                    fontWeight: s.legendBold ? 700 : 400,
+                    // A highlight is drawn as a text outline (halo) — the clean,
+                    // SVG-native way to make an axis title stand out.
+                    outlineWidth: s.legendHighlight ? 3 : 0,
+                    outlineColor: s.legendHighlight || 'transparent',
+                },
+            },
         },
         grid: { line: { stroke: s.gridColor } },
         crosshair: { line: { stroke: s.textColor, strokeDasharray: '6 6' } },
@@ -96,13 +138,35 @@ export const legendConfig = (style?: Partial<ChartStyle> | null) => {
     return { ...base, translateX: tx, translateY: ty };
 };
 
-// Axis legend (title) props for a given axis ('x' | 'y').
-export const axisLegend = (style: Partial<ChartStyle> | null | undefined, axis: 'x' | 'y', legendText: string) => {
+// Truncate a tick label to n chars with an ellipsis (overflow handling).
+const truncate = (v: unknown, n: number): string => {
+    const str = String(v);
+    return n > 0 && str.length > n ? `${str.slice(0, n)}…` : str;
+};
+
+// Axis props for a given axis ('x' | 'y'): the title (custom text or the column
+// name, hidden when its legend is toggled off), plus tick rotation/format so
+// long or numeric tick labels don't overflow. `numeric` ⇒ thousands-format the
+// ticks (value axes); otherwise long categorical labels are truncated.
+export const axisLegend = (
+    style: Partial<ChartStyle> | null | undefined,
+    axis: 'x' | 'y',
+    columnName: string,
+    opts: { numeric?: boolean } = {},
+) => {
     const s = withStyleDefaults(style);
     const isX = axis === 'x';
-    return {
-        legend: legendText,
-        legendPosition: isX ? s.xLegendPosition : s.yLegendPosition,
-        legendOffset: isX ? s.xLegendOffset : s.yLegendOffset,
-    };
+    const show = isX ? s.showXLegend : s.showYLegend;
+    const label = (isX ? s.xAxisLabel : s.yAxisLabel) || columnName;
+
+    const out: Record<string, unknown> = {};
+    if (show && label) {
+        out.legend = label;
+        out.legendPosition = isX ? s.xLegendPosition : s.yLegendPosition;
+        out.legendOffset = isX ? s.xLegendOffset : s.yLegendOffset;
+    }
+    if (isX) out.tickRotation = s.xTickRotation;
+    if (opts.numeric) out.format = (v: unknown) => Number(v).toLocaleString();
+    else if (s.tickTruncate > 0) out.format = (v: unknown) => truncate(v, s.tickTruncate);
+    return out;
 };
