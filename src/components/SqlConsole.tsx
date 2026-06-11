@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Loader2, AlertCircle, Rows3, ChevronDown } from 'lucide-react';
 import CodeMirror, { keymap, Prec, EditorView } from '@uiw/react-codemirror';
-import { sql as sqlLang } from '@codemirror/lang-sql';
+import { sql as sqlLang, PostgreSQL, schemaCompletionSource, keywordCompletionSource } from '@codemirror/lang-sql';
+import { autocompletion, acceptCompletion } from '@codemirror/autocomplete';
 import { useDashboard } from '../context/DashboardContext';
+import { duckdbCompletionSource } from '../duckdbSql';
 import type { Row } from '../sqlgen';
 
 const DEFAULT_SQL = 'SELECT *\nFROM data\nLIMIT 100';
@@ -89,18 +91,35 @@ export function SqlConsole({ columns = [], stateId, defaultColumnsOpen = false, 
     const runRef = useRef<() => void>(() => {});
     runRef.current = () => { void run(); };
 
-    // SQL language + schema-aware autocomplete: the table `data` and its columns
-    // complete as you type (and on ⌘/Ctrl-Space). Rebuilt only when the column set
-    // changes (keyed by name list) so typing doesn't reconfigure the editor.
+    // SQL language + autocomplete. The PostgreSQL dialect covers most DuckDB
+    // keywords/types/functions; on top we complete the `data` table's columns
+    // (unqualified, via defaultTable) and a curated DuckDB function/type/snippet
+    // source. Rebuilt only when the column set changes (keyed by name list) so
+    // typing doesn't reconfigure the editor. ⌘↵ runs; Tab accepts a suggestion.
     const schemaKey = columns.map(c => c.name).join(',');
-    const extensions = useMemo(
-        () => [
-            sqlLang({ schema: { data: columns.map(c => c.name) }, upperCaseKeywords: true }),
+    const extensions = useMemo(() => {
+        const sqlConfig = {
+            dialect: PostgreSQL,
+            schema: { data: columns.map(c => c.name) },
+            defaultTable: 'data',
+            upperCaseKeywords: true,
+        };
+        return [
+            sqlLang(sqlConfig),
+            autocompletion({
+                override: [
+                    schemaCompletionSource(sqlConfig),
+                    keywordCompletionSource(PostgreSQL, true),
+                    duckdbCompletionSource,
+                ],
+            }),
             EditorView.lineWrapping,
-            Prec.highest(keymap.of([{ key: 'Mod-Enter', run: () => { runRef.current(); return true; } }])),
-        ],
-        [schemaKey], // eslint-disable-line react-hooks/exhaustive-deps
-    );
+            Prec.highest(keymap.of([
+                { key: 'Mod-Enter', run: () => { runRef.current(); return true; } },
+                { key: 'Tab', run: acceptCompletion },
+            ])),
+        ];
+    }, [schemaKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const resultColumns = result?.columns || [];
 
@@ -125,7 +144,7 @@ export function SqlConsole({ columns = [], stateId, defaultColumnsOpen = false, 
                     onChange={setSql}
                     extensions={extensions}
                     theme="dark"
-                    basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false }}
+                    basicSetup={{ lineNumbers: false, foldGutter: false, highlightActiveLine: false, autocompletion: false }}
                     height="120px"
                     placeholder="SELECT ... FROM data"
                     className="border border-midnight-border text-sm overflow-hidden focus-within:border-midnight-accent"

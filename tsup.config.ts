@@ -18,6 +18,7 @@ export default defineConfig({
         'react-pivottable',
         '@uiw/react-codemirror',
         '@codemirror/lang-sql',
+        '@codemirror/autocomplete',
     ],
     treeshake: true,
     splitting: false,
