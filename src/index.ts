@@ -21,6 +21,7 @@ export type {
     SavedDashboard,
     PanelInput,
     PanelLayout,
+    PanelRef,
 } from './context/DashboardContext';
 
 // SQL generation + result shaping (pure)
@@ -70,8 +71,8 @@ export type { ChartStyleControlsProps } from './components/ChartStyleControls';
 export { SqlConsole } from './components/SqlConsole';
 export type { SqlConsoleProps, SqlConsoleColumn } from './components/SqlConsole';
 
-export { DashboardRenderer } from './components/DashboardRenderer';
-export type { DashboardRendererProps, Dashboard, DashboardPanel } from './components/DashboardRenderer';
+export { DashboardRenderer, PanelChart } from './components/DashboardRenderer';
+export type { DashboardRendererProps, Dashboard, DashboardPanel, PanelChartProps } from './components/DashboardRenderer';
 
 export { ChartBuilder } from './components/ChartBuilder';
 export type { ChartBuilderProps, ChartBuilderColumn, ChartPanel } from './components/ChartBuilder';

@@ -419,6 +419,13 @@ function PanelContent({ panel, records, columns }: PanelContentProps) {
     }
 }
 
+// PanelChart renders a panel's chart/table/metric BODY only — no panel frame,
+// no title bar. Host-agnostic: the published viewer's single-chart embed route
+// renders exactly this (so an iframe shows the chart and nothing else), and the
+// studio can use it anywhere a bare chart body is needed.
+export const PanelChart = PanelContent;
+export type PanelChartProps = PanelContentProps;
+
 // ─── DashboardRenderer ─────────────────────────────────────────────────────
 
 const GRID_COLS = 12;
@@ -493,7 +500,7 @@ function buildLayout(panels: DashboardPanel[]): Layout[] {
  * The per-panel remove button is similarly gated behind canEditPanels.
  */
 export function DashboardRenderer({ dashboard, records, columns }: DashboardRendererProps) {
-    const { theme, removePanel, persistLayout } = useDashboard();
+    const { theme, removePanel, persistLayout, panelHeaderExtra } = useDashboard();
     const { canEditPanels, canEditLayout } = useCapabilities();
     useInjectRglCss();
 
@@ -522,6 +529,13 @@ export function DashboardRenderer({ dashboard, records, columns }: DashboardRend
                         color: panel.config?.style?.titleColor || undefined,
                     }}
                 >{panel.title || panel.type}</span>
+                {panelHeaderExtra && (
+                    // Host-injected per-panel affordance (e.g. the viewer's
+                    // copy-embed-link icon). Stop drag from hijacking the click.
+                    <span onMouseDown={(e) => e.stopPropagation()} className="flex items-center">
+                        {panelHeaderExtra(panel)}
+                    </span>
+                )}
                 {canEditPanels && removePanel && (
                     <button
                         // Stop drag from starting when the user aims for the X.

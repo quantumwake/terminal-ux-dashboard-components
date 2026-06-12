@@ -92,6 +92,19 @@ export interface DashboardCapabilities {
     // stores it on the panels and saves. Absent ⇒ a static (read-only) grid — the
     // published viewer renders panels exactly where the studio left them.
     persistLayout?: (items: PanelLayout[]) => void;
+
+    // OPTIONAL — host-injected extra content on each panel's title row (rendered
+    // before the remove button). The published viewer uses it for a per-chart
+    // copy-embed-link icon. Absent ⇒ nothing extra renders.
+    panelHeaderExtra?: (panel: PanelRef) => ReactNode;
+}
+
+// PanelRef is the minimal panel identity handed to panelHeaderExtra (the full
+// DashboardPanel type lives in DashboardRenderer; this avoids a circular import).
+export interface PanelRef {
+    id: string;
+    type: string;
+    title?: string;
 }
 
 // PanelLayout is one panel's position + size in the 12-column grid (grid units,
