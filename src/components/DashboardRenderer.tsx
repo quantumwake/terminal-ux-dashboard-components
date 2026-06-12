@@ -13,6 +13,7 @@ import GridLayout, { WidthProvider, type Layout } from 'react-grid-layout';
 import { useDashboard, useCapabilities, type PanelLayout } from '../context/DashboardContext';
 import { shapeChartData, buildChartSQL, aggExpr, qIdent } from '../sqlgen';
 import type { Row, ChartType, ChartField, ChartConfig, ChartFilter } from '../sqlgen';
+import { withStyleDefaults } from '../chartStyle';
 import type { ChartStyle } from '../chartStyle';
 import {
     BarView,
@@ -58,6 +59,9 @@ export interface PanelConfig {
     // metric
     label?: string;
     column?: string;
+
+    // layout: when true the panel takes the full dashboard width + a tall height.
+    fill?: boolean;
 
     // PRECOMPUTED result of config.sql, baked at build/refresh time. When present
     // the panel renders from it directly — no live query. refreshedAt is when it
@@ -175,9 +179,32 @@ function panelSql(type: string, config: PanelConfig): string {
     return '';
 }
 
-// A compact scrollable table for table panels (and the records fallback).
-function DataTable({ rows, columns }: { rows: Row[]; columns?: string[] }) {
+// Format one table cell: numbers get decimal precision (floats → N dp, integers
+// left whole), non-numeric strings pass through, then optional char truncation.
+function formatCell(value: unknown, s: ChartStyle): string {
+    if (value == null) return '';
+    if (typeof value === 'object') return JSON.stringify(value);
+    let str: string;
+    const n = typeof value === 'number' ? value : Number(value);
+    if (value !== '' && typeof value !== 'boolean' && Number.isFinite(n)) {
+        str = Number.isInteger(n)
+            ? n.toLocaleString()
+            : n.toLocaleString(undefined, { minimumFractionDigits: s.cellPrecision, maximumFractionDigits: s.cellPrecision });
+    } else {
+        str = String(value);
+    }
+    if (s.cellTruncate > 0 && str.length > s.cellTruncate) str = `${str.slice(0, s.cellTruncate)}…`;
+    return str;
+}
+
+// A compact scrollable table for table panels (and the records fallback). Cells
+// wrap (default) and numbers are precision-formatted per the panel's style.
+function DataTable({ rows, columns, style }: { rows: Row[]; columns?: string[]; style?: Partial<ChartStyle> }) {
+    const s = withStyleDefaults(style);
     const colNames = columns?.length ? columns : rows[0] ? Object.keys(rows[0]) : [];
+    const cellCls = s.cellWrap
+        ? 'px-2 py-1 text-midnight-text-body align-top whitespace-normal break-words max-w-[280px]'
+        : 'px-2 py-1 text-midnight-text-body truncate max-w-[200px]';
     return (
         <div className="overflow-auto h-full text-xs">
             <table className="w-full">
@@ -187,14 +214,9 @@ function DataTable({ rows, columns }: { rows: Row[]; columns?: string[] }) {
                 <tbody>
                     {rows.map((r, i) => (
                         <tr key={i} className="border-b border-dashed border-midnight-border hover:bg-midnight-raised">
-                            {colNames.map((n) => {
-                                const cellValue = r[n];
-                                return (
-                                    <td key={n} className="px-2 py-1 text-midnight-text-body truncate max-w-[200px]">
-                                        {cellValue == null ? '' : typeof cellValue === 'object' ? JSON.stringify(cellValue) : String(cellValue)}
-                                    </td>
-                                );
-                            })}
+                            {colNames.map((n) => (
+                                <td key={n} className={cellCls}>{formatCell(r[n], s)}</td>
+                            ))}
                         </tr>
                     ))}
                 </tbody>
@@ -304,7 +326,7 @@ function SqlPanel({ panel }: SqlPanelProps) {
         const v = first ? Object.values(first)[0] : 0;
         chart = <MetricView value={Number(v) || 0} config={{ column: config.column || '', agg: config.agg, label: config.label }} />;
     } else if (chartType === 'table') {
-        chart = <DataTable rows={rows} columns={config.columns} />;
+        chart = <DataTable rows={rows} columns={config.columns} style={config.style} />;
     } else {
         const shaped = shapeChartData(chartType as ChartType, rows, { yFields: config.yFields || [] });
         switch (chartType) {
@@ -391,7 +413,7 @@ function PanelContent({ panel, records, columns }: PanelContentProps) {
             return <InsightView config={{ text: config.text }} />;
         case 'table':
             // Records fallback (SQL-backed tables route through SqlPanel above).
-            return <DataTable rows={(records || []).slice(0, 50)} columns={config.columns || columns?.map((c) => c.name)} />;
+            return <DataTable rows={(records || []).slice(0, 50)} columns={config.columns || columns?.map((c) => c.name)} style={config.style} />;
         default:
             return <div className="p-4 text-xs text-midnight-text-muted">Unknown panel type: {type}</div>;
     }
@@ -445,10 +467,12 @@ const GridLayoutWithWidth = WidthProvider(GridLayout);
 function buildLayout(panels: DashboardPanel[]): Layout[] {
     let cx = 0, cy = 0, rowH = 0;
     return panels.map((p) => {
-        const w = Math.min(Math.max(p.width || 6, 1), GRID_COLS);
-        const h = Math.max(p.height || 4, 1);
+        // A "fill" panel takes the full width and a tall height.
+        const fill = !!p.config?.fill;
+        const w = fill ? GRID_COLS : Math.min(Math.max(p.width || 6, 1), GRID_COLS);
+        const h = fill ? Math.max(p.height || 8, 6) : Math.max(p.height || 4, 1);
         if (typeof p.x === 'number' && typeof p.y === 'number') {
-            return { i: p.id, x: p.x, y: p.y, w, h, minW: 2, minH: 2 };
+            return { i: p.id, x: fill ? 0 : p.x, y: p.y, w, h, minW: 2, minH: 2 };
         }
         // Auto-pack: wrap to the next row when this panel won't fit.
         if (cx + w > GRID_COLS) { cx = 0; cy += rowH; rowH = 0; }
@@ -484,15 +508,60 @@ export function DashboardRenderer({ dashboard, records, columns }: DashboardRend
 
     if (!dashboard) return null;
 
+    // One panel frame (header + content), reused by the grid and the full-bleed
+    // single-panel layout. `draggable` adds the drag-handle class to the header.
+    const panelFrame = (panel: DashboardPanel, draggable: boolean) => (
+        <div key={panel.id} className={`border ${theme.border} bg-midnight-surface flex flex-col overflow-hidden h-full`}>
+            <div className={`flex items-center justify-between px-3 py-1.5 border-b ${theme.border} bg-midnight-elevated ${draggable ? DRAG_HANDLE : ''}`}>
+                <span
+                    className="flex-1 text-xs font-mono text-midnight-text-body truncate px-1"
+                    style={{
+                        textAlign: panel.config?.style?.titleAlign || 'left',
+                        fontWeight: panel.config?.style?.titleBold ? 700 : undefined,
+                        background: panel.config?.style?.titleBackground || undefined,
+                        color: panel.config?.style?.titleColor || undefined,
+                    }}
+                >{panel.title || panel.type}</span>
+                {canEditPanels && removePanel && (
+                    <button
+                        // Stop drag from starting when the user aims for the X.
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={() => removePanel(panel.id)}
+                        className="p-0.5 hover:bg-midnight-raised text-midnight-text-muted hover:text-midnight-text-body transition-colors"
+                    >
+                        <X className="w-3 h-3" />
+                    </button>
+                )}
+            </div>
+            <div className="flex-1 min-h-0">
+                <Suspense fallback={<ViewLoading />}>
+                    <PanelContent panel={panel} records={records} columns={columns} />
+                </Suspense>
+            </div>
+        </div>
+    );
+
+    const insightsBanner = dashboard.insights ? (
+        <div className={`border ${theme.border} bg-midnight-elevated px-4 py-3 flex items-start gap-3`}>
+            <Sparkles className="w-5 h-5 text-midnight-accent shrink-0 mt-0.5" />
+            <p className={`text-sm ${theme.text} leading-relaxed`}>{dashboard.insights}</p>
+        </div>
+    ) : null;
+
+    // A single-chart dashboard always maximizes — full width AND height (this is
+    // the published default for one-chart shares). No grid; the panel fills.
+    if (panels.length === 1) {
+        return (
+            <div className="flex flex-col gap-4 p-2 h-full min-h-[60vh]">
+                {insightsBanner}
+                <div className="flex-1 min-h-0">{panelFrame(panels[0], false)}</div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col gap-4 p-2">
-            {/* Insights banner */}
-            {dashboard.insights && (
-                <div className={`border ${theme.border} bg-midnight-elevated px-4 py-3 flex items-start gap-3`}>
-                    <Sparkles className="w-5 h-5 text-midnight-accent shrink-0 mt-0.5" />
-                    <p className={`text-sm ${theme.text} leading-relaxed`}>{dashboard.insights}</p>
-                </div>
-            )}
+            {insightsBanner}
 
             {/* Panel grid (draggable/resizable in the studio, static in the viewer) */}
             <GridLayoutWithWidth
@@ -510,38 +579,7 @@ export function DashboardRenderer({ dashboard, records, columns }: DashboardRend
                 // the published dashboard renders exactly where the studio left it.
                 compactType={canEditLayout ? 'vertical' : null}
             >
-                {panels.map((panel) => (
-                    <div key={panel.id} className={`border ${theme.border} bg-midnight-surface flex flex-col overflow-hidden`}>
-                        {/* Panel header — also the drag handle when editing */}
-                        <div className={`flex items-center justify-between px-3 py-1.5 border-b ${theme.border} bg-midnight-elevated ${canEditLayout ? DRAG_HANDLE : ''}`}>
-                            <span
-                                className="flex-1 text-xs font-mono text-midnight-text-body truncate px-1"
-                                style={{
-                                    textAlign: panel.config?.style?.titleAlign || 'left',
-                                    fontWeight: panel.config?.style?.titleBold ? 700 : undefined,
-                                    background: panel.config?.style?.titleBackground || undefined,
-                                    color: panel.config?.style?.titleColor || undefined,
-                                }}
-                            >{panel.title || panel.type}</span>
-                            {canEditPanels && removePanel && (
-                                <button
-                                    // Stop drag from starting when the user aims for the X.
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onClick={() => removePanel(panel.id)}
-                                    className="p-0.5 hover:bg-midnight-raised text-midnight-text-muted hover:text-midnight-text-body transition-colors"
-                                >
-                                    <X className="w-3 h-3" />
-                                </button>
-                            )}
-                        </div>
-                        {/* Panel content */}
-                        <div className="flex-1 min-h-0">
-                            <Suspense fallback={<ViewLoading />}>
-                                <PanelContent panel={panel} records={records} columns={columns} />
-                            </Suspense>
-                        </div>
-                    </div>
-                ))}
+                {panels.map((panel) => panelFrame(panel, canEditLayout))}
             </GridLayoutWithWidth>
         </div>
     );

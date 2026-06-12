@@ -10,12 +10,14 @@ import { buildChartSQL, shapeChartData } from '../sqlgen';
 import type { ChartType, ChartConfig, ChartField, ChartFilter, Row } from '../sqlgen';
 import { buildNivoTheme, legendConfig, DEFAULT_CHART_STYLE } from '../chartStyle';
 import type { ChartStyle } from '../chartStyle';
+import { makeAxis } from './axis';
 import { groupBy, aggregate } from '../dataShape';
 import {
     BarView, PieView, LineView, ScatterView, HeatmapView,
     type BarDatum, type PieDatum, type LineSerie, type ScatterSerie, type HeatmapSerie,
 } from './views';
 import { ChartStyleControls } from './ChartStyleControls';
+import { TerminalToggle } from '@quantumwake/terminal-ux-components';
 
 // ─── Public types ─────────────────────────────────────────────────
 
@@ -304,7 +306,7 @@ export const GroupedBarChart = ({ records, xFields = [], yFields = [], groupFiel
 
     const legend = legendConfig(style);
     return (
-        <div className="h-full min-h-[400px]">
+        <div className="h-full w-full min-h-[160px]">
             <ResponsiveBar
                 data={data as never}
                 keys={keys}
@@ -313,8 +315,8 @@ export const GroupedBarChart = ({ records, xFields = [], yFields = [], groupFiel
                 margin={{ top: 20, right: 120, bottom: 60, left: 60 }}
                 padding={0.3}
                 colors={colors.slice(0, keys.length)}
-                axisBottom={{ tickSize: 5, tickPadding: 5, tickRotation: -35 }}
-                axisLeft={{ tickSize: 5, tickPadding: 5, format: (v) => Number(v).toLocaleString() }}
+                axisBottom={makeAxis(style, 'x', xFields[0]?.name || '')}
+                axisLeft={makeAxis(style, 'y', '', { numeric: true })}
                 labelSkipWidth={12}
                 labelSkipHeight={12}
                 labelTextColor={{ from: 'color', modifiers: [['darker', 3]] } as never}
@@ -468,6 +470,8 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
     const [style, setStyle] = useState<ChartStyle>(DEFAULT_CHART_STYLE);
     const [showStyle, setShowStyle] = useState(false);
     const [showFields, setShowFields] = useState(false);
+    // Maximize: the saved panel spans the full dashboard width + a tall height.
+    const [fillContainer, setFillContainer] = useState(false);
 
     // SQL preview state (driven by runQuery when engineMode === 'sql').
     const [sqlRows, setSqlRows] = useState<Row[] | null>(null);
@@ -576,13 +580,15 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
 
         // Standardized appearance travels with the panel.
         config.style = style;
+        // Maximize hint (full width + tall height), persisted on the panel config.
+        config.fill = fillContainer;
 
         onSave({
             title: title || `${chartType} chart`,
             type: chartType === 'grouped-bar' ? 'bar' : chartType,
             config,
-            width: 6,
-            height: 2,
+            width: fillContainer ? 12 : 6,
+            height: fillContainer ? 8 : 2,
         });
     };
 
@@ -745,6 +751,10 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
                             placeholder="Chart title..."
                             className="w-full mb-2 px-2 py-1 text-xs font-mono bg-midnight-surface border border-midnight-border text-midnight-text-body outline-none focus:border-midnight-accent transition-colors"
                         />
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-mono text-midnight-text-muted" title="Span the full dashboard width and height">Maximize size</span>
+                            <TerminalToggle size="small" checked={fillContainer} onChange={setFillContainer} />
+                        </div>
                         <button onClick={handleSaveToDashboard}
                             className="w-full px-3 py-1.5 border border-midnight-accent text-midnight-accent text-xs font-mono hover:bg-midnight-accent/10 transition-colors">
                             + Add to Dashboard

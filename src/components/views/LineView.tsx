@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { ResponsiveLine } from '@nivo/line';
 
-import { buildNivoTheme, axisLegend } from '../../chartStyle';
+import { buildNivoTheme } from '../../chartStyle';
 import type { ChartStyle } from '../../chartStyle';
+import { makeAxis } from '../axis';
 import type { Row } from '../../sqlgen';
 
 export interface LineSerie {
@@ -39,7 +40,7 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
     const data = presetData || computed;
 
     return (
-        <div className="h-full min-h-[400px]">
+        <div className="h-full w-full min-h-[160px]">
             <ResponsiveLine
                 data={data as never}
                 margin={{ top: 20, right: 20, bottom: 60, left: 60 }}
@@ -54,8 +55,8 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
                 pointBorderWidth={2}
                 pointBorderColor={{ from: 'serieColor' }}
                 enableGridX={false}
-                axisBottom={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'x', xColumn) }}
-                axisLeft={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'y', yColumn, { numeric: true }) }}
+                axisBottom={makeAxis(style, 'x', xColumn)}
+                axisLeft={makeAxis(style, 'y', yColumn, { numeric: true })}
                 useMesh={true}
                 theme={buildNivoTheme(style)}
             />

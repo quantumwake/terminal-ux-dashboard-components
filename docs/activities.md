@@ -59,3 +59,67 @@ only on the published design-system package, not on host-local components.
 **Status:** deferred — flagged by the user as the right direction but a big lift
 ("revisit later"). Interim: `ChartStyleControls` was rebuilt with consistent
 rows + real sliders/switches (v0.1.14) so it's presentable until the migration.
+DONE in v0.1.16: `ChartStyleControls` now consumes the design system
+(TerminalToggle/Slider/Select/Input from `@quantumwake/terminal-ux-components`).
+
+## Full, per-chart-type chart options (expose what Nivo supports)
+
+**Area:** `ChartStyle` (today a curated, chart-agnostic subset) + `ChartStyleControls`.
+
+**Idea (user, 2026-06-11):** "expose whatever the charts support… fully fledged
+chart options." Instead of a fixed `ChartStyle`, drive the appearance panel from a
+**per-chart-type option schema** describing the Nivo props each chart actually
+supports: colors / color scheme, margins, padding, inner radius (pie),
+curve + enableArea + point size (line), node size (scatter), grid x/y, axis
+formats, legends (position/size/spacing), borders, animation, etc.
+
+**Shape:** a declarative schema per chart type — `{ key, label, control:
+'slider'|'toggle'|'select'|'color', min/max/options, default }` — rendered
+generically into the same Terminal* controls, and merged into the Nivo props at
+render time. Common options (axis titles/ticks/legend/title — the current
+`ChartStyle`) stay shared; type-specific options come from the schema.
+
+**Why a separate phase:** Nivo's options differ per chart, so this is a real
+design + mapping effort (schema authoring + a generic schema→controls renderer +
+a per-type props merger). Worth doing, but scoped on its own.
+
+**Status:** planned next phase (after the v0.1.16 appearance/axis/table/fill work
+lands and is tested). Current `ChartStyle` is the shared common-options layer it
+will build on.
+
+## More chart types (boxplot, 3D surface/heatmap, …)
+
+**Idea (user, 2026-06-11):** add chart types beyond the current bar / grouped-bar
+/ pie / line / scatter / heatmap / metric / table — specifically **boxplots** and
+**3D surfaces / heatmaps**.
+
+**Two tiers, by renderer:**
+1. **Nivo-native (fits today's stack):** `@nivo/boxplot` (distributions/quartiles),
+   and others like `@nivo/radar`, `@nivo/funnel`, `@nivo/sankey`, `@nivo/bump`,
+   `@nivo/calendar`, `@nivo/treemap`. Each needs: a `ChartType` entry, a
+   `buildChartSQL` shape (e.g. boxplot wants raw per-group values, not an
+   aggregate), a `shapeChartData` case, a `*View`, and ChartBuilder wiring. Boxplot
+   SQL ≈ `SELECT group AS g, TRY_CAST(value AS DOUBLE) AS v FROM data` (Nivo computes
+   the quartiles client-side).
+2. **3D (NOT Nivo — different renderer):** Nivo is 2D SVG/Canvas only. 3D surfaces /
+   3D heatmaps need a separate engine — **plotly.js** (`surface`, `mesh3d`,
+   built-in WebGL), echarts-gl, or three.js. This means a second chart-render path
+   alongside Nivo (heavier bundle; WebGL). Scope as its own sub-phase; plotly.js is
+   the least-effort path (declarative, has surface/3d-heatmap out of the box).
+
+**Dependency note:** new Nivo packages are peerDependencies (like the existing
+`@nivo/*`); the hosts must install them. A 3D lib (plotly) is a larger add — gate
+it so non-3D charts don't pull the WebGL bundle.
+
+**Status:** planned — pairs with the per-chart-type options schema above (each new
+type registers its own option schema). Nivo-native types first (cheap, same stack);
+3D as a separate, opt-in renderer sub-phase.
+
+## Searchable column picker when adding to an axis
+
+**Idea (user, 2026-06-11):** in `ChartBuilder`'s DropZone "Add" picker (X/Y/value/
+group field selectors), make the column list **searchable** — type to filter. For
+wide datasets the flat list is unwieldy. Likely a `TerminalAutocomplete` (design
+system) or a small filter input atop the existing dropdown.
+
+**Status:** future enhancement.

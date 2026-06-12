@@ -31,11 +31,19 @@ export interface ChartStyle {
     // Axis title emphasis: bold weight + a highlight halo (outline) colour.
     legendBold: boolean;
     legendHighlight: string; // '' ⇒ no halo
-    // Tick handling (overflow): rotate the x / y ticks, truncate long categorical
-    // tick labels to N chars with an ellipsis (0 ⇒ off).
+    // Tick handling (overflow): rotate the x / y ticks, truncate long tick labels
+    // to N chars with an ellipsis (0 ⇒ off), and/or WRAP long labels onto
+    // multiple lines (default on — wrapping reads better than rotation).
     xTickRotation: number;
     yTickRotation: number;
     tickTruncate: number;
+    tickWrap: boolean;
+    tickWrapWidth: number; // chars per wrapped line
+    // Table cells: wrap long values, and format numbers (decimal precision +
+    // optional truncation). cellPrecision applies to float/decimal values only.
+    cellWrap: boolean;
+    cellPrecision: number;
+    cellTruncate: number; // 0 ⇒ off
     // Series legend placement (charts that have one: pie, grouped bar).
     legendAnchor: LegendAnchor;
     // Panel title (rendered as HTML by DashboardRenderer's header).
@@ -67,9 +75,15 @@ export const DEFAULT_CHART_STYLE: ChartStyle = {
     legendBold: false,
     legendHighlight: '',
     // Tick overflow handling.
-    xTickRotation: -35,
+    xTickRotation: 0,
     yTickRotation: 0,
     tickTruncate: 0,
+    tickWrap: true,
+    tickWrapWidth: 14,
+    // Table cells.
+    cellWrap: true,
+    cellPrecision: 2,
+    cellTruncate: 0,
     // Series legend placement (charts that have one: pie, grouped bar).
     legendAnchor: 'right',
     // Panel title (rendered by DashboardRenderer's panel header).

@@ -2,8 +2,9 @@ import { useMemo } from 'react';
 import { ResponsiveBar } from '@nivo/bar';
 
 import { groupBy, aggregate } from '../../dataShape';
-import { buildNivoTheme, axisLegend } from '../../chartStyle';
+import { buildNivoTheme } from '../../chartStyle';
 import type { ChartStyle } from '../../chartStyle';
+import { makeAxis } from '../axis';
 import type { Row } from '../../sqlgen';
 
 export interface BarDatum {
@@ -33,7 +34,7 @@ export function BarView({ records, groupColumn, valueColumn, aggFn = 'count', da
     const data = presetData || computed;
 
     return (
-        <div className="h-full min-h-[400px]">
+        <div className="h-full w-full min-h-[160px]">
             <ResponsiveBar
                 data={data as never}
                 keys={['value']}
@@ -42,8 +43,8 @@ export function BarView({ records, groupColumn, valueColumn, aggFn = 'count', da
                 padding={0.3}
                 colors={['rgba(74, 222, 128, 0.8)']}
                 borderColor={{ from: 'color', modifiers: [['darker', 1.6]] } as never}
-                axisBottom={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'x', groupColumn) }}
-                axisLeft={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'y', valueColumn, { numeric: true }) }}
+                axisBottom={makeAxis(style, 'x', groupColumn)}
+                axisLeft={makeAxis(style, 'y', valueColumn, { numeric: true })}
                 labelSkipWidth={12}
                 labelSkipHeight={12}
                 labelTextColor={{ from: 'color', modifiers: [['darker', 3]] } as never}

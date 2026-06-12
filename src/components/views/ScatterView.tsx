@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { ResponsiveScatterPlot } from '@nivo/scatterplot';
 
-import { buildNivoTheme, axisLegend } from '../../chartStyle';
+import { buildNivoTheme } from '../../chartStyle';
 import type { ChartStyle } from '../../chartStyle';
+import { makeAxis } from '../axis';
 import type { Row } from '../../sqlgen';
 
 export interface ScatterSerie {
@@ -36,7 +37,7 @@ export function ScatterView({ records, xColumn, yColumn, data: presetData, style
     const data = presetData || computed;
 
     return (
-        <div className="h-full min-h-[400px]">
+        <div className="h-full w-full min-h-[160px]">
             <ResponsiveScatterPlot
                 data={data as never}
                 margin={{ top: 20, right: 20, bottom: 60, left: 60 }}
@@ -44,8 +45,8 @@ export function ScatterView({ records, xColumn, yColumn, data: presetData, style
                 yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
                 colors={['rgba(167, 139, 250, 0.7)']}
                 nodeSize={6}
-                axisBottom={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'x', xColumn, { numeric: true }) }}
-                axisLeft={{ tickSize: 5, tickPadding: 5, ...axisLegend(style, 'y', yColumn, { numeric: true }) }}
+                axisBottom={makeAxis(style, 'x', xColumn, { numeric: true })}
+                axisLeft={makeAxis(style, 'y', yColumn, { numeric: true })}
                 useMesh={true}
                 theme={buildNivoTheme(style)}
             />

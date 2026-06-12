@@ -35,7 +35,7 @@ export function PieView({ records, groupColumn, data: presetData, style }: PieVi
 
     const legend = legendConfig(style);
     return (
-        <div className="h-full min-h-[400px]">
+        <div className="h-full w-full min-h-[160px]">
             <ResponsivePie
                 data={data as never}
                 margin={{ top: 20, right: 120, bottom: 20, left: 20 }}

@@ -122,7 +122,7 @@ export function HeatmapView({
         : { top: 60, right: 20, bottom: 20, left: 100 };
 
     return (
-        <div className="h-full min-h-[400px]">
+        <div className="h-full w-full min-h-[160px]">
             <ResponsiveHeatMap
                 data={data as never}
                 margin={margin}
