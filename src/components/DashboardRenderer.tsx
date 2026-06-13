@@ -21,6 +21,7 @@ import {
     LineView,
     ScatterView,
     HeatmapView,
+    HeatmapPlusView,
     PivotView,
     MetricView,
     InsightView,
@@ -51,6 +52,16 @@ export interface PanelConfig {
     colOrder?: string;
     marginAgg?: string;
     showTotals?: boolean;
+
+    // heatmap-plus extras: dual cell stats, block field, color engine, margins.
+    labelStat?: string;
+    colorStat?: string;
+    blockField?: string;
+    scope?: string;
+    method?: string;
+    vmin?: number;
+    vmax?: number;
+    showMargins?: boolean;
 
     // table / insight
     columns?: string[];
@@ -117,7 +128,7 @@ interface SqlPanelProps {
 // Chart types whose data buildChartSQL can compile from a panel's flat config —
 // so an AI-generated / Direct-mode panel (no config.sql) is still computed,
 // baked (precomputed), and refreshable, exactly like a manual SQL chart.
-const SQL_CHART_TYPES = new Set<string>(['bar', 'grouped-bar', 'pie', 'line', 'scatter', 'heatmap']);
+const SQL_CHART_TYPES = new Set<string>(['bar', 'grouped-bar', 'pie', 'line', 'scatter', 'heatmap', 'heatmap-plus']);
 
 // Panel types that are SQL-backed but NOT compiled via buildChartSQL: table
 // (row preview) and metric (single aggregate). Routing them through SqlPanel
@@ -164,6 +175,14 @@ function panelToChartConfig(chartType: ChartType, config: PanelConfig): ChartCon
             if (config.row) cfg.xFields = [{ name: config.row }];
             if (config.col) cfg.yFields = [{ name: config.col }];
             if (config.value) cfg.valueField = { name: config.value, agg: config.agg };
+            break;
+        case 'heatmap-plus':
+            if (config.row) cfg.xFields = [{ name: config.row }];
+            if (config.col) cfg.yFields = [{ name: config.col }];
+            if (config.value) cfg.valueField = { name: config.value, agg: config.labelStat };
+            cfg.labelStat = config.labelStat;
+            cfg.colorStat = config.colorStat;
+            cfg.blockField = config.blockField;
             break;
     }
     return cfg;
@@ -352,6 +371,11 @@ function SqlPanel({ panel }: SqlPanelProps) {
                     ? <HeatmapView data={shaped as never} rowColumn={config.row || ''} colColumn={config.col || ''} rowOrder={config.rowOrder as never} colOrder={config.colOrder as never} marginAgg={config.marginAgg} showTotals={config.showTotals} style={config.style} />
                     : <div className="flex items-center justify-center h-full text-xs text-midnight-text-muted">No data</div>;
                 break;
+            case 'heatmap-plus':
+                chart = (shaped as unknown[]).length
+                    ? <HeatmapPlusView data={shaped as never} rowColumn={config.row || ''} colColumn={config.col || ''} scope={config.scope as never} method={config.method as never} vmin={config.vmin} vmax={config.vmax} rowOrder={config.rowOrder as never} colOrder={config.colOrder as never} showMargins={config.showMargins} style={config.style} />
+                    : <div className="flex items-center justify-center h-full text-xs text-midnight-text-muted">No data</div>;
+                break;
             default:
                 chart = <div className="p-4 text-xs text-midnight-text-muted">Unsupported SQL chart: {chartType}</div>;
         }
@@ -405,6 +429,8 @@ function PanelContent({ panel, records, columns }: PanelContentProps) {
             return config.x && config.y ? <ScatterView records={records} xColumn={config.x} yColumn={config.y} style={config.style} /> : null;
         case 'heatmap':
             return config.row && config.col ? <HeatmapView records={records} rowColumn={config.row} colColumn={config.col} valueColumn={config.value} aggFn={config.agg || 'count'} rowOrder={config.rowOrder as never} colOrder={config.colOrder as never} marginAgg={config.marginAgg} showTotals={config.showTotals} style={config.style} /> : null;
+        case 'heatmap-plus':
+            return config.row && config.col ? <HeatmapPlusView records={records} rowColumn={config.row} colColumn={config.col} valueColumn={config.value} labelStat={config.labelStat as never} colorStat={config.colorStat as never} blockField={config.blockField} scope={config.scope as never} method={config.method as never} vmin={config.vmin} vmax={config.vmax} rowOrder={config.rowOrder as never} colOrder={config.colOrder as never} showMargins={config.showMargins} style={config.style} /> : null;
         case 'pivot':
             return <PivotView records={records} />;
         case 'metric':

@@ -61,6 +61,10 @@ export type {
 export { groupBy, aggregate } from './dataShape';
 export type { AggFn } from './dataShape';
 
+// Heatmap-plus color engine (pure)
+export { normalizeCells, heatColor, heatLabelColor, HEAT_STATS } from './heatmapColor';
+export type { HeatStat, ColorScope, ColorMethod, HeatCell, ColorOptions } from './heatmapColor';
+
 // Chart views (Nivo + pivot)
 export * from './components/views';
 

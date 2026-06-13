@@ -4,7 +4,7 @@
 
 import type { Row } from './sqlgen';
 
-export type AggFn = 'count' | 'distinct' | 'sum' | 'avg' | 'min' | 'max';
+export type AggFn = 'count' | 'distinct' | 'sum' | 'avg' | 'min' | 'max' | 'median';
 
 // Group records by the string value of a column.
 export const groupBy = (records: Row[], column: string): Record<string, Row[]> => {
@@ -27,6 +27,12 @@ export const aggregate = (records: Row[], column: string, fn: AggFn | string): n
         case 'avg': return values.length ? values.reduce((a: number, b) => a + Number(b), 0) / values.length : 0;
         case 'min': return Math.min(...values.map(Number));
         case 'max': return Math.max(...values.map(Number));
+        case 'median': {
+            const nums = values.map(Number).filter((v) => !Number.isNaN(v)).sort((a, b) => a - b);
+            if (!nums.length) return 0;
+            const mid = Math.floor(nums.length / 2);
+            return nums.length % 2 ? nums[mid] : (nums[mid - 1] + nums[mid]) / 2;
+        }
         default: return records.length;
     }
 };

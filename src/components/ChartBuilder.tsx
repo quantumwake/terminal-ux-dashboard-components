@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, Suspense } from 'react';
 import { ResponsiveBar } from '@nivo/bar';
 import {
-    BarChart3, PieChart, TrendingUp, ScatterChart, LayoutGrid,
+    BarChart3, PieChart, TrendingUp, ScatterChart, LayoutGrid, Grid3x3,
     Plus, X, GripVertical, ChevronDown, Filter, Code, Loader2, AlertCircle,
 } from 'lucide-react';
 
@@ -13,9 +13,10 @@ import type { ChartStyle } from '../chartStyle';
 import { makeAxis } from './axis';
 import { groupBy, aggregate } from '../dataShape';
 import {
-    BarView, PieView, LineView, ScatterView, HeatmapView,
-    type BarDatum, type PieDatum, type LineSerie, type ScatterSerie, type HeatmapSerie,
+    BarView, PieView, LineView, ScatterView, HeatmapView, HeatmapPlusView,
+    type BarDatum, type PieDatum, type LineSerie, type ScatterSerie, type HeatmapSerie, type HeatPlusDatum,
 } from './views';
+import { HEAT_STATS, type HeatStat, type ColorScope, type ColorMethod } from '../heatmapColor';
 import { ChartStyleControls } from './ChartStyleControls';
 import { TerminalToggle } from '@quantumwake/terminal-ux-components';
 
@@ -66,6 +67,7 @@ const CHART_TYPES: ChartTypeOption[] = [
     { id: 'line', icon: TrendingUp, label: 'Line' },
     { id: 'scatter', icon: ScatterChart, label: 'Scatter' },
     { id: 'heatmap', icon: LayoutGrid, label: 'Heatmap' },
+    { id: 'heatmap-plus', icon: Grid3x3, label: 'Heatmap+' },
     { id: 'grouped-bar', icon: BarChart3, label: 'Grouped Bar' },
 ];
 
@@ -108,6 +110,18 @@ const ORDER_OPTIONS: IdLabel[] = [
     { id: 'total-asc', label: 'Total ↑' },
 ];
 const MARGIN_AGGS: IdLabel[] = ['sum', 'avg', 'min', 'max', 'count'].map((a) => ({ id: a, label: a }));
+// heatmap-plus controls.
+const HEAT_STAT_OPTIONS: IdLabel[] = HEAT_STATS.map((a) => ({ id: a, label: a }));
+const SCOPE_OPTIONS: IdLabel[] = [
+    { id: 'global', label: 'Global' },
+    { id: 'row', label: 'Per row' },
+    { id: 'column', label: 'Per column' },
+    { id: 'block', label: 'Per block' },
+];
+const METHOD_OPTIONS: IdLabel[] = [
+    { id: 'linear', label: 'Linear' },
+    { id: 'rank', label: 'Rank' },
+];
 const FILTER_OP_OPTIONS: IdLabel[] = FILTER_OPS.map((o) => ({ id: o, label: o }));
 
 // ─── Field Pill ───────────────────────────────────────────────────
@@ -336,6 +350,20 @@ interface HeatmapOpts {
     showTotals?: boolean;
 }
 
+// heatmap-plus preview options (the dual stats + color engine + margins).
+interface HeatPlusOpts {
+    labelStat?: HeatStat;
+    colorStat?: HeatStat;
+    blockField?: string;
+    scope?: ColorScope;
+    method?: ColorMethod;
+    vmin?: number;
+    vmax?: number;
+    rowOrder?: 'alpha' | 'total-asc' | 'total-desc';
+    colOrder?: 'alpha' | 'total-asc' | 'total-desc';
+    showMargins?: boolean;
+}
+
 interface ChartPreviewProps {
     chartType: ChartType;
     records?: Row[];
@@ -349,12 +377,13 @@ interface ChartPreviewProps {
     sqlLoading: boolean;
     sqlError: string | null;
     heatmapOpts?: HeatmapOpts;
+    heatPlusOpts?: HeatPlusOpts;
     style: ChartStyle;
 }
 
 const ChartPreview = ({
     chartType, records, xFields, yFields, valueField, groupField, engineMode,
-    sqlRows, sqlLoading, sqlError, heatmapOpts = {}, style,
+    sqlRows, sqlLoading, sqlError, heatmapOpts = {}, heatPlusOpts = {}, style,
 }: ChartPreviewProps) => {
     const xCol = xFields[0]?.name;
     const yCol = yFields[0]?.name;
@@ -382,6 +411,8 @@ const ChartPreview = ({
             case 'line': return <Suspense fallback={null}><LineView data={shaped as LineSerie[]} xColumn={xCol} yColumn={yCol} style={style} /></Suspense>;
             case 'scatter': return <Suspense fallback={null}><ScatterView data={shaped as ScatterSerie[]} xColumn={xCol} yColumn={yCol} style={style} /></Suspense>;
             case 'heatmap': return (shaped as HeatmapSerie[]).length ? <Suspense fallback={null}><HeatmapView data={shaped as HeatmapSerie[]} rowColumn={xCol} colColumn={yCol} {...heatmapOpts} style={style} /></Suspense>
+                : <div className="flex items-center justify-center h-full text-sm text-midnight-text-muted">No data</div>;
+            case 'heatmap-plus': return (shaped as HeatPlusDatum[]).length ? <Suspense fallback={null}><HeatmapPlusView data={shaped as HeatPlusDatum[]} rowColumn={xCol} colColumn={yCol} {...heatPlusOpts} style={style} /></Suspense>
                 : <div className="flex items-center justify-center h-full text-sm text-midnight-text-muted">No data</div>;
             default: return <div className="flex items-center justify-center h-full text-sm text-midnight-text-muted">Select a chart type</div>;
         }
@@ -411,6 +442,9 @@ const ChartPreview = ({
 
         case 'heatmap':
             return xCol && yCol ? <Suspense fallback={null}><HeatmapView records={records} rowColumn={xCol} colColumn={yCol} valueColumn={valueField?.name} aggFn={valueField?.agg || 'count'} {...heatmapOpts} style={style} /></Suspense> : null;
+
+        case 'heatmap-plus':
+            return xCol && yCol ? <Suspense fallback={null}><HeatmapPlusView records={records} rowColumn={xCol} colColumn={yCol} valueColumn={valueField?.name} {...heatPlusOpts} style={style} /></Suspense> : null;
 
         default:
             return <div className="flex items-center justify-center h-full text-sm text-midnight-text-muted">Select a chart type</div>;
@@ -466,6 +500,18 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
     const [marginAgg, setMarginAgg] = useState('sum');
     const [showTotals, setShowTotals] = useState(false);
 
+    // Heatmap+ dual cell stats + color engine. labelStat → cell label; colorStat
+    // → cell color (default: same). scope/method drive the color normalization
+    // (see heatmapColor.ts); vmin/vmax pin the linear domain for cross-chart
+    // comparability ('' = auto). The block field reuses the color field zone.
+    const [labelStat, setLabelStat] = useState<HeatStat>('count');
+    const [colorStat, setColorStat] = useState<HeatStat>('count');
+    const [scope, setScope] = useState<ColorScope>('global');
+    const [method, setMethod] = useState<ColorMethod>('linear');
+    const [vmin, setVmin] = useState('');
+    const [vmax, setVmax] = useState('');
+    const [showMargins, setShowMargins] = useState(false);
+
     // Standardized chart appearance (see chartStyle.ts).
     const [style, setStyle] = useState<ChartStyle>(DEFAULT_CHART_STYLE);
     const [showStyle, setShowStyle] = useState(false);
@@ -480,8 +526,11 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
 
     // The SQL generated from the current visual config.
     const generatedSql = useMemo(
-        () => buildChartSQL({ chartType, xFields, yFields, valueField, filters } as ChartConfig),
-        [chartType, xFields, yFields, valueField, filters],
+        () => buildChartSQL({
+            chartType, xFields, yFields, valueField, filters,
+            labelStat, colorStat, blockField: colorField?.name,
+        } as ChartConfig),
+        [chartType, xFields, yFields, valueField, filters, labelStat, colorStat, colorField],
     );
 
     // Run the generated query whenever it changes (SQL mode only).
@@ -559,6 +608,25 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
             config.marginAgg = marginAgg;
             config.showTotals = showTotals;
         }
+        if (chartType === 'heatmap-plus') {
+            config.row = xFields[0]?.name;
+            config.col = yFields[0]?.name;
+            // Value column optional; absent ⇒ both stats are a row count.
+            if (valueField) config.value = valueField.name;
+            else delete config.value;
+            config.labelStat = labelStat;
+            config.colorStat = colorStat;
+            if (colorField) config.blockField = colorField.name; else delete config.blockField;
+            config.scope = scope;
+            config.method = method;
+            // '' ⇒ auto (omit), else a finite number.
+            const nMin = parseFloat(vmin), nMax = parseFloat(vmax);
+            if (Number.isFinite(nMin)) config.vmin = nMin; else delete config.vmin;
+            if (Number.isFinite(nMax)) config.vmax = nMax; else delete config.vmax;
+            config.rowOrder = rowOrder;
+            config.colOrder = colOrder;
+            config.showMargins = showMargins;
+        }
 
         // In SQL mode persist the generated query + filters so the saved panel
         // renders server-side (exact, full dataset). Legacy fields above remain
@@ -591,6 +659,9 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
             height: fillContainer ? 8 : 2,
         });
     };
+
+    // Both heatmaps share the Rows/Columns/Cell-Value field layout.
+    const isHeat = chartType === 'heatmap' || chartType === 'heatmap-plus';
 
     return (
         <div className="flex h-full">
@@ -634,27 +705,27 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
 
                 {/* Drop Zones */}
                 <DropZone
-                    label={chartType === 'heatmap' ? 'Rows' : 'X Axis / Group By'}
+                    label={isHeat ? 'Rows' : 'X Axis / Group By'}
                     fields={xFields}
                     columns={columns}
                     onAdd={(f) => addField('x', f)}
                     onRemove={(i) => removeField('x', i)}
                     onChangeAgg={() => {}}
-                    maxFields={chartType === 'pie' || chartType === 'heatmap' ? 1 : 3}
+                    maxFields={chartType === 'pie' || isHeat ? 1 : 3}
                 />
 
                 <DropZone
-                    label={chartType === 'heatmap' ? 'Columns' : 'Y Axis / Values'}
+                    label={isHeat ? 'Columns' : 'Y Axis / Values'}
                     fields={yFields}
                     columns={columns}
                     onAdd={(f) => addField('y', f)}
                     onRemove={(i) => removeField('y', i)}
                     onChangeAgg={(i, agg) => changeAgg('y', i, agg)}
-                    showAgg={chartType !== 'heatmap'}
-                    maxFields={chartType === 'heatmap' ? 1 : 5}
+                    showAgg={!isHeat}
+                    maxFields={isHeat ? 1 : 5}
                 />
 
-                {chartType === 'heatmap' && (
+                {isHeat && (
                     <DropZone
                         label="Cell Value (optional — defaults to count)"
                         fields={valueField ? [valueField] : []}
@@ -662,9 +733,75 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
                         onAdd={(f) => addField('value', f)}
                         onRemove={() => removeField('value')}
                         onChangeAgg={(i, agg) => changeAgg('value', i, agg)}
-                        showAgg={true}
+                        showAgg={chartType === 'heatmap'}
                         maxFields={1}
                     />
+                )}
+
+                {chartType === 'heatmap-plus' && (
+                    <>
+                        <DropZone
+                            label="Block (optional — color-scope grouping)"
+                            fields={colorField ? [colorField] : []}
+                            columns={columns}
+                            onAdd={(f) => addField('color', f)}
+                            onRemove={() => removeField('color')}
+                            onChangeAgg={() => {}}
+                            maxFields={1}
+                        />
+                        <div>
+                            <div className="text-xs uppercase text-midnight-text-muted mb-2 font-mono">Cell Stats</div>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-3 min-h-[28px]">
+                                    <span className="text-xs font-mono text-midnight-text-muted">Label stat</span>
+                                    <SelectControl value={labelStat} options={HEAT_STAT_OPTIONS} onChange={(v) => setLabelStat(v as HeatStat)} />
+                                </div>
+                                <div className="flex items-center justify-between gap-3 min-h-[28px]">
+                                    <span className="text-xs font-mono text-midnight-text-muted">Color stat</span>
+                                    <SelectControl value={colorStat} options={HEAT_STAT_OPTIONS} onChange={(v) => setColorStat(v as HeatStat)} />
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <div className="text-xs uppercase text-midnight-text-muted mb-2 font-mono">Color Engine</div>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-3 min-h-[28px]">
+                                    <span className="text-xs font-mono text-midnight-text-muted">Scale scope</span>
+                                    <SelectControl value={scope} options={SCOPE_OPTIONS} onChange={(v) => setScope(v as ColorScope)} />
+                                </div>
+                                <div className="flex items-center justify-between gap-3 min-h-[28px]">
+                                    <span className="text-xs font-mono text-midnight-text-muted">Scale method</span>
+                                    <SelectControl value={method} options={METHOD_OPTIONS} onChange={(v) => setMethod(v as ColorMethod)} />
+                                </div>
+                                <div className="flex items-center justify-between gap-3 min-h-[28px]">
+                                    <span className="text-xs font-mono text-midnight-text-muted">Fixed min / max</span>
+                                    <div className="flex gap-1">
+                                        <input value={vmin} onChange={(e) => setVmin(e.target.value)} placeholder="auto" inputMode="decimal"
+                                            className="w-14 px-2 py-1 text-xs font-mono bg-midnight-surface border border-midnight-border text-midnight-text-body outline-none focus:border-midnight-accent" />
+                                        <input value={vmax} onChange={(e) => setVmax(e.target.value)} placeholder="auto" inputMode="decimal"
+                                            className="w-14 px-2 py-1 text-xs font-mono bg-midnight-surface border border-midnight-border text-midnight-text-body outline-none focus:border-midnight-accent" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <div className="text-xs uppercase text-midnight-text-muted mb-2 font-mono">Order &amp; Margins</div>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-3 min-h-[28px]">
+                                    <span className="text-xs font-mono text-midnight-text-muted">Order rows</span>
+                                    <SelectControl value={rowOrder} options={ORDER_OPTIONS} onChange={(v) => setRowOrder(v as typeof rowOrder)} />
+                                </div>
+                                <div className="flex items-center justify-between gap-3 min-h-[28px]">
+                                    <span className="text-xs font-mono text-midnight-text-muted">Order columns</span>
+                                    <SelectControl value={colOrder} options={ORDER_OPTIONS} onChange={(v) => setColOrder(v as typeof colOrder)} />
+                                </div>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={showMargins} onChange={(e) => setShowMargins(e.target.checked)} className="accent-midnight-accent" />
+                                    <span className="text-xs font-mono text-midnight-text-muted">Show margins (row / col / grand)</span>
+                                </label>
+                            </div>
+                        </div>
+                    </>
                 )}
 
                 {chartType === 'heatmap' && (
@@ -798,6 +935,13 @@ export function ChartBuilder({ records, columns, stateId, onSave }: ChartBuilder
                     sqlLoading={sqlLoading}
                     sqlError={sqlError}
                     heatmapOpts={{ rowOrder, colOrder, marginAgg, showTotals }}
+                    heatPlusOpts={{
+                        labelStat, colorStat, blockField: colorField?.name,
+                        scope, method,
+                        vmin: Number.isFinite(parseFloat(vmin)) ? parseFloat(vmin) : undefined,
+                        vmax: Number.isFinite(parseFloat(vmax)) ? parseFloat(vmax) : undefined,
+                        rowOrder, colOrder, showMargins,
+                    }}
                     style={style}
                 />
             </div>

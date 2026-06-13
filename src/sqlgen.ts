@@ -9,7 +9,7 @@
 // Generated queries alias their output columns to stable names (g, v, m0…, x,
 // y, r, c) so the shaping functions don't depend on user column names.
 
-export type ChartType = 'bar' | 'grouped-bar' | 'pie' | 'line' | 'scatter' | 'heatmap';
+export type ChartType = 'bar' | 'grouped-bar' | 'pie' | 'line' | 'scatter' | 'heatmap' | 'heatmap-plus';
 
 export interface ChartField {
     name: string;
@@ -28,6 +28,11 @@ export interface ChartConfig {
     yFields?: ChartField[];
     valueField?: ChartField | null;
     filters?: ChartFilter[];
+    // heatmap-plus only: the two independent cell stats (label vs color) and an
+    // optional block field for block-scope coloring.
+    labelStat?: string;
+    colorStat?: string;
+    blockField?: string;
 }
 
 export type Row = Record<string, unknown>;
@@ -68,6 +73,7 @@ export const aggExpr = (agg: string | undefined, col?: string): string => {
         case 'avg': return `AVG(${qNum(col)})`;
         case 'min': return `MIN(${qNum(col)})`;
         case 'max': return `MAX(${qNum(col)})`;
+        case 'median': return `MEDIAN(${qNum(col)})`;
         default: return 'COUNT(*)';
     }
 };
@@ -111,6 +117,9 @@ export const buildChartSQL = ({
     yFields = [],
     valueField = null,
     filters = [],
+    labelStat,
+    colorStat,
+    blockField,
 }: ChartConfig): string | null => {
     const where = compileWhere(filters);
     const x = xFields[0]?.name;
@@ -153,6 +162,22 @@ export const buildChartSQL = ({
             if (!x || !y) return null;
             const metric = valueField ? aggExpr(valueField.agg || 'count', valueField.name) : 'COUNT(*)';
             return `SELECT ${qIdent(x)} AS r, ${qIdent(y)} AS c, ${metric} AS v FROM ${TABLE}${where} GROUP BY 1, 2`;
+        }
+        case 'heatmap-plus': {
+            if (!x || !y) return null;
+            const col = valueField?.name;
+            // Two independent stats per cell (label vs color); no value column ⇒
+            // both are a row count. GROUPING SETS computes the body cells AND the
+            // row/col/grand margins in ONE pass — every margin aggregated over the
+            // UNDERLYING rows (so median/avg margins stay correct, never a stat of
+            // already-aggregated cells). GROUPING() flags which set each row is.
+            const lv = col ? aggExpr(labelStat || valueField?.agg || 'count', col) : 'COUNT(*)';
+            const cv = col ? aggExpr(colorStat || labelStat || valueField?.agg || 'count', col) : 'COUNT(*)';
+            const blockSel = blockField ? `, ANY_VALUE(${qIdent(blockField)}) AS block` : '';
+            return `SELECT ${qIdent(x)} AS r, ${qIdent(y)} AS c, ${lv} AS lv, ${cv} AS cv${blockSel}, `
+                + `GROUPING(${qIdent(x)}) AS gr, GROUPING(${qIdent(y)}) AS gc `
+                + `FROM ${TABLE}${where} `
+                + `GROUP BY GROUPING SETS ((${qIdent(x)}, ${qIdent(y)}), (${qIdent(x)}), (${qIdent(y)}), ())`;
         }
         default:
             return null;
@@ -208,6 +233,21 @@ export const shapeChartData = (
             return rowKeys.map((rk) => ({
                 id: rk,
                 data: colKeys.map((ck) => ({ x: ck, y: cell[rk][ck] || 0 })),
+            }));
+        }
+        case 'heatmap-plus': {
+            // Flat (r, c, lv, cv, gr, gc, block) rows — body cells plus margin
+            // rows (gr/gc flag which). HeatmapPlusView assembles the matrix,
+            // ordering, margins and coloring; here just coerce types. r/c stay
+            // null on margin rows (the view keys margins by the non-grouped axis).
+            return rows.map((r) => ({
+                r: r.r == null ? null : String(r.r),
+                c: r.c == null ? null : String(r.c),
+                lv: Number(r.lv) || 0,
+                cv: Number(r.cv) || 0,
+                gr: Number(r.gr) || 0,
+                gc: Number(r.gc) || 0,
+                ...(r.block != null ? { block: String(r.block) } : {}),
             }));
         }
         default:

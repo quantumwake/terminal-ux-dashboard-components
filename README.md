@@ -6,18 +6,18 @@ These components are **capability-injected**: they never import a store or an AP
 client. The host wires concrete functions (query / save / load / search / …) via
 `<DashboardProvider>`, and the components call them through `useDashboard()`.
 
-`alethic-ism-ui-enterprise` (the studio) is the **source of truth** for all
-dashboard capability. The published viewer (`alethic-ism-publish-ui`) provides
-only `theme` + `runQuery` (DuckDB-WASM), so the studio-only verbs — **save,
-edit, load, search, AI analyze/refine** — are simply not wired and their
-affordances disappear. One component tree, two hosts, differences injected.
+A **full-capability host** (the studio) wires every verb and gets full CRUD. A
+**read-only host** (a published viewer) provides only `theme` + `runQuery`
+(e.g. DuckDB-WASM), so the logged-in-only verbs — **save, edit, load, search,
+AI analyze/refine** — are simply not wired and their affordances disappear. One
+component tree, any number of hosts, differences injected.
 
 ## Usage
 
 ```tsx
 import { DashboardProvider } from '@quantumwake/terminal-ux-dashboard-components';
 
-// Studio (ui-enterprise): wire everything.
+// Full-capability host (studio): wire everything.
 <DashboardProvider
   theme={theme}
   runQuery={(sql, stateId) => store.runStateFsQuery(sql, undefined, stateId)}
@@ -32,21 +32,21 @@ import { DashboardProvider } from '@quantumwake/terminal-ux-dashboard-components
   {/* ChartBuilder, DashboardRenderer, SqlConsole, DataExplorer */}
 </DashboardProvider>
 
-// Published viewer (publish-ui): read-only — theme + runQuery only.
+// Read-only host (viewer): theme + runQuery only.
 <DashboardProvider theme={theme} runQuery={(sql, stateId) => runQuery(shareId, stateId!, sql)}>
   {/* same components, no save/edit/load affordances */}
 </DashboardProvider>
 ```
 
 `runQuery(sql, stateId)` must return `{ columns, rows }`, executing `sql` against
-a view named `data` over the state's dataset (studio → statefs-node `/query`;
-viewer → DuckDB-WASM `read_parquet`).
+a view named `data` over the state's dataset (a full host might run it against a
+SQL service `/query`; a read-only host against DuckDB-WASM `read_parquet`).
 
 ## Status
 
 - ✅ Capability contract (`DashboardProvider` / `useDashboard` / `useCapabilities`)
 - ✅ Pure utilities: `sqlgen`, `chartStyle`
-- ⏳ Components (migrating from ui-enterprise, in tranches): views/, `SqlConsole`,
+- ⏳ Components (landing in tranches): views/, `SqlConsole`,
   `ChartBuilder`, `DashboardRenderer`, `DataExplorer`
 
 ## Build
@@ -56,4 +56,3 @@ npm install
 npm run build   # tsup → dist (esm + cjs + d.ts)
 npm run lint    # tsc --noEmit
 ```
-# terminal-ux-dashboard-components

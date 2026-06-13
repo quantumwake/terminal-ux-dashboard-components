@@ -19,5 +19,8 @@ export type { ScatterViewProps, ScatterSerie } from './ScatterView';
 export { HeatmapView } from './HeatmapView';
 export type { HeatmapViewProps, HeatmapSerie } from './HeatmapView';
 
+export { HeatmapPlusView } from './HeatmapPlusView';
+export type { HeatmapPlusViewProps, HeatPlusDatum } from './HeatmapPlusView';
+
 export { PivotView } from './PivotView';
 export type { PivotViewProps } from './PivotView';

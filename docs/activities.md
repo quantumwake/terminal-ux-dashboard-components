@@ -1,6 +1,28 @@
-# Activities / Backlog — terminal-ux-dashboard-components
+ct# Activities / Backlog — terminal-ux-dashboard-components
 
 Deferred improvements and follow-ups. Not blockers — captured so they aren't lost.
+
+## DONE — Heatmap+ (`heatmap-plus`) advanced heatmap (2026-06-13)
+
+New chart type alongside `heatmap` (existing heatmap untouched → zero regression
+to baked data). Files: `heatmapColor.ts` (pure color engine), `views/HeatmapPlusView.tsx`,
+`sqlgen.ts` (`heatmap-plus` GROUPING-SETS query + shaper, `median` in `aggExpr`),
+`dataShape.ts` (`median`), `DashboardRenderer.tsx` + `ChartBuilder.tsx` wiring.
+
+- **Dual stats per cell:** independent `labelStat` (cell label) + `colorStat`
+  (drives color); each is min|max|avg|sum|median|count.
+- **Margins** (row / col / grand) computed over the UNDERLYING rows — SQL via
+  `GROUP BY GROUPING SETS` (one pass), direct path via group+aggregate — so
+  median/avg margins are correct, not a stat of aggregated cells. Rendered as
+  own-scope colored Σ row/column. Rows/cols sortable by margin.
+- **Color engine** = cmap(method(colorValue, scope)): scope global|row|column|block,
+  method linear|rank (Hazen percentile), fixed vmin/vmax, RdYlGn default,
+  auto-contrast labels. nivo gets a precomputed-`t` colors FUNCTION (its built-in
+  scales are global-only). `d3-scale-chromatic` added (inlined by tsup).
+- Block scope reuses the builder's color-field zone.
+
+**Open:** browser verification (builds + typecheck pass; not yet eyeballed).
+Not released to npm yet.
 
 ## Precomputed chart results: back large results with a result parquet (not inline JSON)
 
@@ -41,9 +63,8 @@ pickers, `FiltersSection`, title input), `SqlConsole` chips, `DataExplorer` tabs
 `<select>/<input>/<button>` styled with Tailwind to approximate the terminal
 look. A historical comment ("the package can't import the host's TerminalDropdown")
 predates the existence of the published **`@quantumwake/terminal-ux-components`**
-design system — which both hosts already depend on (publish-ui `^0.3.2`,
-ui-enterprise). So the coupling concern is moot: the package can depend on the
-design system directly.
+design system — which the hosts already depend on. So the coupling concern is
+moot: the package can depend on the design system directly.
 
 **Why it matters:** the hand-rolled controls drift from the rest of the ISM UI —
 spacing, toggles, and inputs look "jammed in" and off-brand (user feedback,
