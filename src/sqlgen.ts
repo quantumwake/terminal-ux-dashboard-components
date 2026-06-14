@@ -4,7 +4,8 @@
 // The query runner exposes a state's full dataset as a view named `data`. The
 // chart builder generates SQL against `data` (exact over the whole dataset)
 // instead of aggregating a client-side sample. The SAME SQL runs server-side in
-// the studio (statefs-node /query) or client-side in the viewer (DuckDB-WASM).
+// a full host (e.g. a SQL service /query) or client-side in a read-only host
+// (e.g. DuckDB-WASM).
 //
 // Generated queries alias their output columns to stable names (g, v, m0…, x,
 // y, r, c) so the shaping functions don't depend on user column names.
@@ -53,7 +54,7 @@ export const qLit = (v: unknown): string => {
     return `'${s.replace(/'/g, "''")}'`;
 };
 
-// statefs stores every column as VARCHAR (state values are JSON strings), so
+// The dataset stores every column as VARCHAR (state values are JSON strings), so
 // numeric aggregations must coerce the column to a number first: SUM/AVG hard
 // error on VARCHAR ("No function matches sum(VARCHAR)"), and MIN/MAX would sort
 // lexically ("9" > "10"). TRY_CAST is used (not a bare ::DECIMAL / CAST) so a
@@ -148,7 +149,7 @@ export const buildChartSQL = ({
         }
         case 'scatter': {
             if (!x || !y) return null;
-            // Scatter is numeric-on-numeric. statefs stores VARCHAR, so coerce
+            // Scatter is numeric-on-numeric. The dataset stores VARCHAR, so coerce
             // both axes with TRY_CAST and keep only rows where BOTH coerce to a
             // number — non-numeric/empty cells become NULL and are filtered out
             // (instead of silently plotting at 0). DOUBLE (not the aggregate

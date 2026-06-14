@@ -3,16 +3,16 @@
 // store or an API client. Instead the HOST wires concrete functions here, and
 // the components call them via useDashboard().
 //
-// Two hosts, one component tree:
-//   - ui-enterprise (studio, source of truth): provides everything — runQuery
-//     against statefs-node /query, plus the logged-in verbs (save/load/search/
-//     delete/analyze/refine/edit).
-//   - publish-ui (published viewer, immutable): provides ONLY theme + runQuery
-//     (DuckDB-WASM). The studio-only verbs are omitted, so the chart builder,
-//     dashboard and SQL runner render read-only — no save/edit/load affordances.
+// Any number of hosts, one component tree:
+//   - full-capability host (studio, source of truth): provides everything —
+//     runQuery against a SQL service /query, plus the logged-in verbs (save/load/
+//     search/delete/analyze/refine/edit).
+//   - read-only host (published viewer, immutable): provides ONLY theme + runQuery
+//     (e.g. DuckDB-WASM). The logged-in-only verbs are omitted, so the chart
+//     builder, dashboard and SQL runner render read-only — no save/edit/load.
 //
-// Rule of thumb: a capability that is absent ⇒ its affordance is hidden. So
-// publish-ui drops nothing functionally except persistence/editing.
+// Rule of thumb: a capability that is absent ⇒ its affordance is hidden. So a
+// read-only host drops nothing functionally except persistence/editing.
 
 import { createContext, useContext, type ReactNode } from 'react';
 
@@ -49,8 +49,9 @@ export interface PanelInput {
 // the rest are OPTIONAL and gate their UI (absent ⇒ hidden).
 export interface DashboardCapabilities {
     // REQUIRED. Run a chart/console SQL string against a state's dataset (exposed
-    // as the view `data`) and return rows. Studio → statefs-node /query; viewer →
-    // DuckDB-WASM. stateId selects the dataset when the host is multi-state.
+    // as the view `data`) and return rows. Full host → a SQL service /query;
+    // read-only host → DuckDB-WASM. stateId selects the dataset when the host is
+    // multi-state.
     runQuery: (sql: string, stateId?: string) => Promise<QueryResult>;
 
     // OPTIONAL — studio-only (logged-in user) verbs. Omitted by the viewer.

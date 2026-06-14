@@ -1,6 +1,6 @@
 // dataShape — pure client-side grouping/aggregation helpers used by the chart
 // views when they aggregate records locally (the fallback path; the primary path
-// is server/WASM SQL via sqlgen). Extracted from ui-enterprise's DataExplorer.
+// is server/WASM SQL via sqlgen).
 
 import type { Row } from './sqlgen';
 

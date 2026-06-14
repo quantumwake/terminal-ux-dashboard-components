@@ -32,8 +32,8 @@ Not released to npm yet.
 **Current model (shipped, v0.1.9):** a SQL-backed panel stores its computed
 result **inline** on `panel.config.data` (rows), baked by `ChartBuilder` at save
 and refreshable in the studio via `persistPanelData`. Both hosts render from it
-(no live query): the studio computes on build/refresh against statefs-node
-`/query`; the published viewer renders the stored rows. A **row cap**
+(no live query): a full host computes on build/refresh against its SQL service
+`/query`; a read-only host renders the stored rows. A **row cap**
 (`MAX_PRECOMPUTE_ROWS = 5000`) keeps the inlined JSON small — above it the panel
 stays live/Refresh-only.
 

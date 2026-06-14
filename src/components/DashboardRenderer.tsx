@@ -3,8 +3,8 @@
 //
 // Capabilities (theme, runQuery, removePanel) are injected by the host via
 // DashboardContext — this component never imports a store or API client.
-//   - studio (ui-enterprise): wires removePanel ⇒ panels show a remove button.
-//   - published viewer (publish-ui): omits removePanel ⇒ read-only dashboard.
+//   - full-capability host (studio): wires removePanel ⇒ panels show a remove button.
+//   - read-only host (published viewer): omits removePanel ⇒ read-only dashboard.
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { X, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';

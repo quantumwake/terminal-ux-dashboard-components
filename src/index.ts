@@ -1,9 +1,9 @@
 // @quantumwake/terminal-ux-dashboard-components
 //
 // Capability-injected dashboard / chart-builder / SQL-runner components shared by
-// the ISM studio (ui-enterprise, source of truth) and the published viewer
-// (publish-ui). The host wires the query/save/load/search fns via
-// <DashboardProvider>; the viewer omits the logged-in-only verbs and renders
+// any host: a full-capability host (the studio, source of truth) and a read-only
+// host (a published viewer). The host wires the query/save/load/search fns via
+// <DashboardProvider>; a read-only host omits the logged-in-only verbs and renders
 // read-only.
 
 // Capability contract

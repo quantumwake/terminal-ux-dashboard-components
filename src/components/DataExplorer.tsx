@@ -1,16 +1,16 @@
-// DataExplorer — the host-agnostic container for the statefs Data Explorer.
+// DataExplorer — the host-agnostic container for the Data Explorer.
 //
-// This is the most store-coupled component in the studio. Here it reads NO
-// store: all data/state arrives via props, and every studio-only verb
+// This is the most store-coupled component, yet here it reads NO store: all
+// data/state arrives via props, and every logged-in-only verb
 // (save/load/search/delete/analyze/refine/edit) is an OPTIONAL injected
 // capability consumed through useDashboard()/useCapabilities(). When a
-// capability is absent its affordance is hidden and the published viewer
+// capability is absent its affordance is hidden and a read-only host
 // renders read-only.
 //
 // State ownership:
 //   - data/state-in (records, columns, states, profile, dashboard,
 //     savedDashboards, loading flags, active selection) → PROPS (the host owns
-//     fetching/selection and the zustand store).
+//     fetching/selection and its own store).
 //   - actions (save/list/search/load/delete/analyze/refine) → injected caps.
 //   - purely-local UI (active tab, save-name input, showSaved toggle,
 //     fullscreen) → useState.
@@ -35,7 +35,7 @@ export interface Column {
     type: string;
 }
 
-/** A selectable state (dataset) in the statefs catalog. */
+/** A selectable state (dataset) in the host's catalog. */
 export interface StatefsState {
     state_id: string;
     row_count?: number;

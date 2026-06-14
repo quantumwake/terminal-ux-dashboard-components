@@ -22,7 +22,7 @@ import { TerminalToggle } from '@quantumwake/terminal-ux-components';
 
 // ─── Public types ─────────────────────────────────────────────────
 
-// A schema column descriptor (name + statefs type tag used for the pill color).
+// A schema column descriptor (name + type tag used for the pill color).
 export interface ChartBuilderColumn {
     name: string;
     type?: string;
