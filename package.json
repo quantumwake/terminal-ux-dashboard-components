@@ -1,6 +1,6 @@
 {
   "name": "@quantumwake/terminal-ux-dashboard-components",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "Dashboard, chart-builder and SQL-runner React components for the Alethic ISM apps. Capability-injected: the host wires the query/save/load/search fns. A full-capability host gets full CRUD; a read-only host that wires only theme + runQuery omits the logged-in-only verbs (save/edit/load) and renders read-only.",
   "license": "MIT",
   "author": "quantumwake.io",
