@@ -8,7 +8,10 @@ import type { Row } from '../../sqlgen';
 
 export interface LineSerie {
     id: string;
-    data: { x: string; y: number }[];
+    /** lo/hi (optional, per point) draw a soft envelope band behind the
+     *  line — the reading for "this line summarizes several": the band is
+     *  the min–max spread of what it aggregates. */
+    data: { x: string; y: number; lo?: number; hi?: number }[];
 }
 
 export interface LineViewProps {
@@ -17,21 +20,21 @@ export interface LineViewProps {
     yColumn: string;
     /** Pre-shaped Nivo line series bypasses client-side processing. */
     data?: LineSerie[];
-    /** Serie ids to draw dotted — the aggregate-vs-individual distinction
-     *  (an average line reads as derived, a member line as observed). */
-    dashedIds?: string[];
     style?: Partial<ChartStyle>;
 }
 
 // Line layer datum shape Nivo hands custom layers (typed loosely on purpose —
-// only the fields the dashed layer touches).
+// only the fields the custom layers touch).
 interface LayerSerie {
     id: string | number;
     color: string;
-    data: { position: { x: number | null; y: number | null } }[];
+    data: {
+        data: { lo?: number; hi?: number };
+        position: { x: number | null; y: number | null };
+    }[];
 }
 
-export function LineView({ records, xColumn, yColumn, data: presetData, dashedIds, style }: LineViewProps) {
+export function LineView({ records, xColumn, yColumn, data: presetData, style }: LineViewProps) {
     const computed = useMemo<LineSerie[]>(() => {
         if (presetData || !records) return [];
         const sorted = [...records]
@@ -67,9 +70,29 @@ export function LineView({ records, xColumn, yColumn, data: presetData, dashedId
     const longest = data.reduce((a, b) => (b.data.length > a.data.length ? b : a), { id: '', data: [] as LineSerie['data'] });
     const tickValues = thinTicks(longest.data.map((d) => d.x), s.maxXTicks);
 
-    // Dotted series need a custom lines layer (Nivo has no per-serie dash).
-    const dashed = new Set(dashedIds || []);
-    const linesLayer = ({ series, lineGenerator }: { series: LayerSerie[]; lineGenerator: (pts: unknown) => string }) => (
+    // Aggregate (banded) series, by id — they draw an envelope and carry
+    // slightly more line weight than observed series: band + weight read as
+    // "summary of several" without dash speckle.
+    const bandedIds = new Set(data.filter((serie) => serie.data.some((d) => d.lo != null)).map((serie) => serie.id));
+
+    type Gen = (pts: { x: number | null; y: number | null }[]) => string;
+
+    // Envelope bands: the min–max spread behind an aggregate line, curved
+    // with the same generator so the edges track the line's shape.
+    const bandsLayer = ({ series, yScale, lineGenerator }: { series: LayerSerie[]; yScale: (v: number) => number; lineGenerator: Gen }) => (
+        <>
+            {series.map((serie) => {
+                const pts = serie.data.filter((d) => d.data.lo != null && d.data.hi != null && d.position.x != null);
+                if (pts.length < 2) return null;
+                const upper = lineGenerator(pts.map((d) => ({ x: d.position.x, y: yScale(d.data.hi as number) })));
+                const lower = lineGenerator([...pts].reverse().map((d) => ({ x: d.position.x, y: yScale(d.data.lo as number) })));
+                if (!upper || !lower) return null;
+                return <path key={`band-${serie.id}`} d={`${upper} L ${lower.slice(1)} Z`} fill={serie.color} opacity={0.12} />;
+            })}
+        </>
+    );
+
+    const linesLayer = ({ series, lineGenerator }: { series: LayerSerie[]; lineGenerator: Gen }) => (
         <>
             {series.map((serie) => (
                 <path
@@ -77,9 +100,8 @@ export function LineView({ records, xColumn, yColumn, data: presetData, dashedId
                     d={lineGenerator(serie.data.map((d) => d.position))}
                     fill="none"
                     stroke={serie.color}
-                    strokeWidth={2}
+                    strokeWidth={bandedIds.has(String(serie.id)) ? 2.5 : 1.5}
                     strokeLinecap="round"
-                    strokeDasharray={dashed.has(String(serie.id)) ? '1 5' : undefined}
                 />
             ))}
         </>
@@ -104,7 +126,7 @@ export function LineView({ records, xColumn, yColumn, data: presetData, dashedId
                 axisBottom={{ ...makeAxis(style, 'x', xColumn), ...(tickValues ? { tickValues } : {}) }}
                 axisLeft={makeAxis(style, 'y', yColumn, { numeric: true })}
                 useMesh={true}
-                layers={['grid', 'markers', 'axes', 'areas', linesLayer, 'crosshair', 'slices', 'mesh', 'legends'] as never}
+                layers={['grid', 'markers', 'axes', 'areas', bandsLayer, linesLayer, 'crosshair', 'slices', 'mesh', 'legends'] as never}
                 theme={buildNivoTheme(style)}
             />
         </div>
