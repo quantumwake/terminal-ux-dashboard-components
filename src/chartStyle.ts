@@ -10,6 +10,13 @@ export type LegendAnchor = 'right' | 'top-left' | 'top-right' | 'bottom-left' | 
 export type LegendPosition = 'start' | 'middle' | 'end';
 export type TitleAlign = 'left' | 'center' | 'right';
 
+export interface ChartMargin {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+}
+
 export interface ChartStyle {
     background: string;
     textColor: string;
@@ -51,6 +58,19 @@ export interface ChartStyle {
     titleBold: boolean;
     titleBackground: string; // '' ⇒ transparent
     titleColor: string; // '' ⇒ inherit
+    // Chart frame: a fixed pixel height (0 ⇒ fill the parent, the previous
+    // behaviour) and a margin override merged over the view's default (null
+    // ⇒ the view's default). Views ignored these before this field existed —
+    // every view now honours them via chartSizing().
+    height: number;
+    margin: Partial<ChartMargin> | null;
+    // Point-scale x axes label EVERY point; maxXTicks caps them to at most N
+    // evenly-spaced ticks (0 ⇒ all ticks). See thinTicks().
+    maxXTicks: number;
+    // Fixed-order categorical series palette ([] ⇒ the view's default hue,
+    // or DEFAULT_SERIES_COLORS once a chart holds several series). Series
+    // past the palette's end fold to a neutral — never a cycled hue.
+    seriesColors: string[];
 }
 
 export const DEFAULT_CHART_STYLE: ChartStyle = {
@@ -91,7 +111,68 @@ export const DEFAULT_CHART_STYLE: ChartStyle = {
     titleBold: false,
     titleBackground: '',
     titleColor: '',
+    // Chart frame + series color model.
+    height: 0,
+    margin: null,
+    maxXTicks: 0,
+    seriesColors: [],
 };
+
+// The default categorical series palette: eight hues stepped for a dark
+// terminal surface, in a FIXED order that is the colorblind-safety mechanism
+// (adjacent pairs validated: CVD ΔE ≥ 8, normal-vision ΔE ≥ 15, ≥ 3:1
+// contrast on #0e0e10). Assign by series index, never cycle.
+export const DEFAULT_SERIES_COLORS: string[] = [
+    '#3987e5', // blue
+    '#d95926', // orange
+    '#199e70', // aqua
+    '#c98500', // yellow
+    '#d55181', // magenta
+    '#008300', // green
+    '#9085e9', // violet
+    '#e66767', // red
+];
+
+// Neutral for series past the palette's end ("Other") — folding beats cycling,
+// which would hand two series one hue.
+export const SERIES_OVERFLOW_COLOR = '#707078';
+
+// seriesColor answers "what color is series i" under the style's palette:
+// the indexed slot, or the overflow neutral once slots run out. Consumers
+// (legends, chips) use this to stay in step with the charts.
+export const seriesColor = (i: number, style?: Partial<ChartStyle> | null): string => {
+    const s = withStyleDefaults(style);
+    const palette = s.seriesColors.length ? s.seriesColors : DEFAULT_SERIES_COLORS;
+    return i < palette.length ? palette[i] : SERIES_OVERFLOW_COLOR;
+};
+
+// chartSizing resolves the frame each view renders into: a fixed height when
+// the style sets one (else fill-parent with the historical 160px floor), and
+// the style's margin merged over the view's default.
+export const chartSizing = (
+    style: Partial<ChartStyle> | null | undefined,
+    defaultMargin: ChartMargin,
+): { frameClass: string; frameStyle: { height?: number }; margin: ChartMargin } => {
+    const s = withStyleDefaults(style);
+    return {
+        frameClass: s.height > 0 ? 'w-full' : 'h-full w-full min-h-[160px]',
+        frameStyle: s.height > 0 ? { height: s.height } : {},
+        margin: { ...defaultMargin, ...(s.margin || {}) },
+    };
+};
+
+// thinTicks picks at most `max` evenly-spaced values (first and last always
+// kept) for a point-scale axis's tickValues. undefined ⇒ let the chart label
+// every point (max 0, or few enough points already).
+export function thinTicks<T>(values: T[], max: number): T[] | undefined {
+    if (max <= 0 || values.length <= max) return undefined;
+    if (max === 1) return [values[values.length - 1]];
+    const picked: T[] = [];
+    for (let i = 0; i < max; i++) {
+        picked.push(values[Math.round((i * (values.length - 1)) / (max - 1))]);
+    }
+    return [...new Set(picked)];
+}
 
 export const LEGEND_ANCHORS: LegendAnchor[] = ['right', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'none'];
 

@@ -44,14 +44,20 @@ export type {
 // Chart appearance model (pure)
 export {
     DEFAULT_CHART_STYLE,
+    DEFAULT_SERIES_COLORS,
+    SERIES_OVERFLOW_COLOR,
     LEGEND_ANCHORS,
     withStyleDefaults,
     buildNivoTheme,
     legendConfig,
     axisLegend,
+    seriesColor,
+    chartSizing,
+    thinTicks,
 } from './chartStyle';
 export type {
     ChartStyle,
+    ChartMargin,
     LegendAnchor,
     LegendPosition,
     TitleAlign,

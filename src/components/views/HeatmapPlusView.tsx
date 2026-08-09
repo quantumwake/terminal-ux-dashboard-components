@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { ResponsiveHeatMap } from '@nivo/heatmap';
 
 import { groupBy, aggregate } from '../../dataShape';
-import { buildNivoTheme, withStyleDefaults } from '../../chartStyle';
+import { buildNivoTheme, chartSizing, withStyleDefaults } from '../../chartStyle';
 import type { ChartStyle } from '../../chartStyle';
 import type { Row } from '../../sqlgen';
 import {
@@ -203,11 +203,13 @@ export function HeatmapPlusView({
     const { nivoData, t } = built;
     const tAt = (serieId: string, x: string): number => t.get(cellKey(serieId, x)) ?? 0;
 
+    const { frameClass, frameStyle, margin } = chartSizing(style, { top: 60, right: 20, bottom: showMargins ? 60 : 20, left: 100 });
+
     return (
-        <div className="h-full w-full min-h-[160px]">
+        <div className={frameClass} style={frameStyle}>
             <ResponsiveHeatMap
                 data={nivoData as never}
-                margin={{ top: 60, right: 20, bottom: showMargins ? 60 : 20, left: 100 }}
+                margin={margin}
                 valueFormat={((v: number) => fmtNum(v)) as never}
                 axisTop={{ tickSize: 5, tickPadding: 5, tickRotation: s.xTickRotation, legend: s.showXLegend ? (s.xAxisLabel || colColumn) : '', legendPosition: s.xLegendPosition, legendOffset: -50 }}
                 axisLeft={{ tickSize: 5, tickPadding: 5, legend: s.showYLegend ? (s.yAxisLabel || rowColumn) : '', legendPosition: s.yLegendPosition, legendOffset: -80 }}

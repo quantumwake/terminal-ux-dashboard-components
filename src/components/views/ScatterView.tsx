@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ResponsiveScatterPlot } from '@nivo/scatterplot';
 
-import { buildNivoTheme } from '../../chartStyle';
+import { buildNivoTheme, chartSizing, seriesColor, withStyleDefaults } from '../../chartStyle';
 import type { ChartStyle } from '../../chartStyle';
 import { makeAxis } from '../axis';
 import type { Row } from '../../sqlgen';
@@ -36,14 +36,24 @@ export function ScatterView({ records, xColumn, yColumn, data: presetData, style
     }, [records, xColumn, yColumn, presetData]);
     const data = presetData || computed;
 
+    const s = withStyleDefaults(style);
+    const { frameClass, frameStyle, margin } = chartSizing(style, { top: 20, right: 20, bottom: 60, left: 60 });
+
+    // One serie keeps the historical hue; several take the categorical palette
+    // by serie index (scatter is an all-pairs form — keep series counts low).
+    const colorById = new Map(data.map((serie, i) => [
+        serie.id,
+        s.seriesColors.length || data.length > 1 ? seriesColor(i, s) : 'rgba(167, 139, 250, 0.7)',
+    ]));
+
     return (
-        <div className="h-full w-full min-h-[160px]">
+        <div className={frameClass} style={frameStyle}>
             <ResponsiveScatterPlot
                 data={data as never}
-                margin={{ top: 20, right: 20, bottom: 60, left: 60 }}
+                margin={margin}
                 xScale={{ type: 'linear', min: 'auto', max: 'auto' }}
                 yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
-                colors={['rgba(167, 139, 250, 0.7)']}
+                colors={((serie: { serieId?: string; id?: string }) => colorById.get(serie.serieId ?? serie.id ?? '')) as never}
                 nodeSize={6}
                 axisBottom={makeAxis(style, 'x', xColumn, { numeric: true })}
                 axisLeft={makeAxis(style, 'y', yColumn, { numeric: true })}

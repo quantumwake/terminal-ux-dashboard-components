@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { ResponsiveBar } from '@nivo/bar';
 
 import { groupBy, aggregate } from '../../dataShape';
-import { buildNivoTheme } from '../../chartStyle';
+import { buildNivoTheme, chartSizing, withStyleDefaults } from '../../chartStyle';
 import type { ChartStyle } from '../../chartStyle';
 import { makeAxis } from '../axis';
 import type { Row } from '../../sqlgen';
@@ -33,15 +33,18 @@ export function BarView({ records, groupColumn, valueColumn, aggFn = 'count', da
     }, [records, groupColumn, valueColumn, aggFn, presetData]);
     const data = presetData || computed;
 
+    const s = withStyleDefaults(style);
+    const { frameClass, frameStyle, margin } = chartSizing(style, { top: 20, right: 20, bottom: 60, left: 60 });
+
     return (
-        <div className="h-full w-full min-h-[160px]">
+        <div className={frameClass} style={frameStyle}>
             <ResponsiveBar
                 data={data as never}
                 keys={['value']}
                 indexBy="group"
-                margin={{ top: 20, right: 20, bottom: 60, left: 60 }}
+                margin={margin}
                 padding={0.3}
-                colors={['rgba(74, 222, 128, 0.8)']}
+                colors={[s.seriesColors[0] || 'rgba(74, 222, 128, 0.8)']}
                 borderColor={{ from: 'color', modifiers: [['darker', 1.6]] } as never}
                 axisBottom={makeAxis(style, 'x', groupColumn)}
                 axisLeft={makeAxis(style, 'y', valueColumn, { numeric: true })}

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { ResponsiveHeatMap } from '@nivo/heatmap';
 
 import { groupBy, aggregate } from '../../dataShape';
-import { buildNivoTheme, withStyleDefaults } from '../../chartStyle';
+import { buildNivoTheme, chartSizing, withStyleDefaults } from '../../chartStyle';
 import type { ChartStyle } from '../../chartStyle';
 import type { Row } from '../../sqlgen';
 
@@ -117,12 +117,12 @@ export function HeatmapView({
         return <div className="p-8 text-center text-midnight-text-muted">Not enough distinct values for a heatmap</div>;
     }
 
-    const margin = showTotals
+    const { frameClass, frameStyle, margin } = chartSizing(style, showTotals
         ? { top: 60, right: 70, bottom: 60, left: 100 }
-        : { top: 60, right: 20, bottom: 20, left: 100 };
+        : { top: 60, right: 20, bottom: 20, left: 100 });
 
     return (
-        <div className="h-full w-full min-h-[160px]">
+        <div className={frameClass} style={frameStyle}>
             <ResponsiveHeatMap
                 data={data as never}
                 margin={margin}

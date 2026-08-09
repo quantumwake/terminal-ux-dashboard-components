@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { ResponsivePie } from '@nivo/pie';
 
 import { groupBy } from '../../dataShape';
-import { buildNivoTheme, legendConfig } from '../../chartStyle';
+import { buildNivoTheme, chartSizing, seriesColor, legendConfig, withStyleDefaults } from '../../chartStyle';
 import type { ChartStyle } from '../../chartStyle';
 import type { Row } from '../../sqlgen';
 
@@ -34,16 +34,23 @@ export function PieView({ records, groupColumn, data: presetData, style }: PieVi
     const data = presetData || computed;
 
     const legend = legendConfig(style);
+    const s = withStyleDefaults(style);
+    const { frameClass, frameStyle, margin } = chartSizing(style, { top: 20, right: 120, bottom: 20, left: 20 });
+
+    // Slices carry identity → the fixed-order categorical palette, assigned by
+    // slice index ('(other)' lands on the overflow neutral past the palette).
+    const colorById = new Map(data.map((d, i) => [d.id, seriesColor(i, s)]));
+
     return (
-        <div className="h-full w-full min-h-[160px]">
+        <div className={frameClass} style={frameStyle}>
             <ResponsivePie
                 data={data as never}
-                margin={{ top: 20, right: 120, bottom: 20, left: 20 }}
+                margin={margin}
                 innerRadius={0.4}
                 padAngle={1}
                 cornerRadius={3}
                 activeOuterRadiusOffset={8}
-                colors={{ scheme: 'set2' }}
+                colors={((d: { id: string }) => colorById.get(d.id)) as never}
                 borderWidth={1}
                 borderColor={{ from: 'color', modifiers: [['darker', 0.2]] } as never}
                 arcLinkLabelsSkipAngle={10}

@@ -46,7 +46,17 @@ snapshot parquet. Same SQL, different executor.
 `make version` → bump patch → `gh release create v{X.Y.Z}` → CI (`publish.yml`) runs lint+build+
 `npm publish`. Local `make version` also lints+builds as a guard. Current: **0.1.3**.
 
+## Chart frame & series colors (0.1.20)
+`ChartStyle` gained `height` (px; 0 ⇒ fill parent), `margin` (merged over the view default),
+`maxXTicks` (thins point-scale x ticks — before this, a line chart labeled EVERY point), and
+`seriesColors` (fixed-order categorical palette). Every view honours them via `chartSizing()` —
+previously a passed `height`/`margin` was **silently ignored**, which rendered host charts crammed.
+`DEFAULT_SERIES_COLORS` is eight hues stepped + CVD-validated for a dark terminal surface
+(`#0e0e10`); series past the palette fold to `SERIES_OVERFLOW_COLOR`, never a cycled hue. Hosts
+color their own legends/chips with `seriesColor(i, style)` to stay in step. `SparklineView` is the
+axis-free trend mark (single numeric series, line + gradient area).
+
 ## Components
 `DashboardProvider`/`useDashboard`/`useCapabilities`; `sqlgen`, `chartStyle`, `dataShape`; views
-(`Bar/Pie/Line/Scatter/Heatmap/Metric/Insight/Pivot`); `ChartBuilder` (+ exported `GroupedBarChart`),
+(`Bar/Pie/Line/Sparkline/Scatter/Heatmap/Metric/Insight/Pivot`); `ChartBuilder` (+ exported `GroupedBarChart`),
 `DashboardRenderer`, `SqlConsole`, `ChartStyleControls`, `DataExplorer`.

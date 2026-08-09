@@ -13,6 +13,9 @@ export type { PieViewProps, PieDatum } from './PieView';
 export { LineView } from './LineView';
 export type { LineViewProps, LineSerie } from './LineView';
 
+export { SparklineView } from './SparklineView';
+export type { SparklineViewProps } from './SparklineView';
+
 export { ScatterView } from './ScatterView';
 export type { ScatterViewProps, ScatterSerie } from './ScatterView';
 
