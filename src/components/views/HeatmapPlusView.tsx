@@ -219,6 +219,7 @@ export function HeatmapPlusView({
                 borderColor="#334155"
                 labelTextColor={((cell: { serieId: string; data: { x: string } }) => heatLabelColor(tAt(cell.serieId, cell.data.x))) as never}
                 hoverTarget="cell"
+                animate={s.animate}
                 theme={buildNivoTheme(style)}
             />
         </div>

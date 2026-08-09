@@ -59,6 +59,7 @@ export function PieView({ records, groupColumn, data: presetData, style }: PieVi
                 arcLabelsSkipAngle={10}
                 arcLabelsTextColor={{ from: 'color', modifiers: [['darker', 3]] } as never}
                 legends={legend ? [legend as never] : []}
+                animate={s.animate}
                 theme={buildNivoTheme(style)}
             />
         </div>

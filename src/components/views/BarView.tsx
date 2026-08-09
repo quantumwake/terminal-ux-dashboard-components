@@ -68,6 +68,7 @@ export function BarView({ records, groupColumn, valueColumn, aggFn = 'count', da
                 labelSkipWidth={12}
                 labelSkipHeight={12}
                 labelTextColor={{ from: 'color', modifiers: [['darker', 3]] } as never}
+                animate={s.animate}
                 theme={buildNivoTheme(style)}
             />
         </div>

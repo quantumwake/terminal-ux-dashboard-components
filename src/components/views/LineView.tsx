@@ -135,6 +135,7 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
                 axisLeft={makeAxis(style, 'y', yColumn, { numeric: true })}
                 useMesh={true}
                 layers={['grid', 'markers', 'axes', 'areas', bandsLayer, linesLayer, 'crosshair', 'slices', 'mesh', 'legends'] as never}
+                animate={s.animate}
                 theme={buildNivoTheme(style)}
             />
         </div>

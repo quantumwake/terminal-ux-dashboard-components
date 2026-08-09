@@ -136,6 +136,7 @@ export function HeatmapView({
                 borderColor="#334155"
                 labelTextColor={{ from: 'color', modifiers: [['darker', 3]] } as never}
                 hoverTarget="cell"
+                animate={s.animate}
                 theme={buildNivoTheme(style)}
             />
         </div>

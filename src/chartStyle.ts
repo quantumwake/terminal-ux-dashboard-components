@@ -80,6 +80,10 @@ export interface ChartStyle {
     // Bar charts: the value label drawn on each bar (off when bars are
     // dense — the labels collide with the axis).
     barLabels: boolean;
+    // Spring enter/exit animations. OFF by default: on live (polling)
+    // charts Nivo's exit transitions can wedge, leaving stale axis ticks
+    // stacked over fresh ones. Turn on only for one-shot charts.
+    animate: boolean;
     // Fixed-order categorical series palette ([] ⇒ the view's default hue,
     // or DEFAULT_SERIES_COLORS once a chart holds several series). Series
     // past the palette's end fold to a neutral — never a cycled hue.
@@ -132,6 +136,7 @@ export const DEFAULT_CHART_STYLE: ChartStyle = {
     areaOpacity: 0.15,
     yFromZero: false,
     barLabels: true,
+    animate: false,
     seriesColors: [],
 };
 

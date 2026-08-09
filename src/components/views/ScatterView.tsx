@@ -58,6 +58,7 @@ export function ScatterView({ records, xColumn, yColumn, data: presetData, style
                 axisBottom={makeAxis(style, 'x', xColumn, { numeric: true })}
                 axisLeft={makeAxis(style, 'y', yColumn, { numeric: true })}
                 useMesh={true}
+                animate={s.animate}
                 theme={buildNivoTheme(style)}
             />
         </div>
