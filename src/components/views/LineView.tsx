@@ -70,6 +70,14 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
     const longest = data.reduce((a, b) => (b.data.length > a.data.length ? b : a), { id: '', data: [] as LineSerie['data'] });
     const tickValues = thinTicks(longest.data.map((d) => d.x), s.maxXTicks);
 
+    // Stable scale: 0 up to a nice ceiling over the window's max (line AND
+    // band bounds) — the axis moves only when data crosses a threshold.
+    let yScale: Record<string, unknown> = { type: 'linear', min: 'auto', max: 'auto' };
+    if (s.yFromZero) {
+        const dataMax = Math.max(0, ...data.flatMap((serie) => serie.data.map((d) => Math.max(d.y, d.hi ?? d.y))));
+        yScale = { type: 'linear', min: 0, max: niceCeil(dataMax) };
+    }
+
     // Aggregate (banded) series, by id — they draw an envelope and carry
     // slightly more line weight than observed series: band + weight read as
     // "summary of several" without dash speckle.
@@ -113,7 +121,7 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
                 data={data as never}
                 margin={margin}
                 xScale={{ type: 'point' }}
-                yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+                yScale={yScale as never}
                 curve="monotoneX"
                 enableArea={s.areaOpacity > 0}
                 areaOpacity={s.areaOpacity}
@@ -131,6 +139,18 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
             />
         </div>
     );
+}
+
+// niceCeil rounds up to the next 1–2–5×10^k above the value (with ~5%
+// headroom), so a live max maps to a stable, readable axis top.
+function niceCeil(v: number): number {
+    if (v <= 0) return 1;
+    const padded = v * 1.05;
+    const mag = Math.pow(10, Math.floor(Math.log10(padded)));
+    for (const step of [1, 2, 5, 10]) {
+        if (padded <= step * mag) return step * mag;
+    }
+    return 10 * mag;
 }
 
 export default LineView;

@@ -72,6 +72,11 @@ export interface ChartStyle {
     // Line charts: the area fill under each line (0 ⇒ no shading — several
     // overlapping fills read as mush).
     areaOpacity: number;
+    // Line charts: anchor y at 0 and pin the top to a NICE ceiling
+    // (1–2–5×10^k above the window max) — a live chart's scale then only
+    // moves when the data crosses a threshold, instead of re-fitting (and
+    // visibly breathing) on every poll. Default off (auto-fit).
+    yFromZero: boolean;
     // Bar charts: the value label drawn on each bar (off when bars are
     // dense — the labels collide with the axis).
     barLabels: boolean;
@@ -125,6 +130,7 @@ export const DEFAULT_CHART_STYLE: ChartStyle = {
     maxXTicks: 0,
     maxYTicks: 0,
     areaOpacity: 0.15,
+    yFromZero: false,
     barLabels: true,
     seriesColors: [],
 };
