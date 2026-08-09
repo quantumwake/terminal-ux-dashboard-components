@@ -17,10 +17,21 @@ export interface LineViewProps {
     yColumn: string;
     /** Pre-shaped Nivo line series bypasses client-side processing. */
     data?: LineSerie[];
+    /** Serie ids to draw dotted — the aggregate-vs-individual distinction
+     *  (an average line reads as derived, a member line as observed). */
+    dashedIds?: string[];
     style?: Partial<ChartStyle>;
 }
 
-export function LineView({ records, xColumn, yColumn, data: presetData, style }: LineViewProps) {
+// Line layer datum shape Nivo hands custom layers (typed loosely on purpose —
+// only the fields the dashed layer touches).
+interface LayerSerie {
+    id: string | number;
+    color: string;
+    data: { position: { x: number | null; y: number | null } }[];
+}
+
+export function LineView({ records, xColumn, yColumn, data: presetData, dashedIds, style }: LineViewProps) {
     const computed = useMemo<LineSerie[]>(() => {
         if (presetData || !records) return [];
         const sorted = [...records]
@@ -52,8 +63,27 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
     ]));
 
     // Point x-scales label every point — thin to the style's cap (the ticks
-    // must be a subset of the x values, so compute from the first serie).
-    const tickValues = thinTicks(data[0]?.data.map((d) => d.x) ?? [], s.maxXTicks);
+    // must be a subset of the x values, so compute from the longest serie).
+    const longest = data.reduce((a, b) => (b.data.length > a.data.length ? b : a), { id: '', data: [] as LineSerie['data'] });
+    const tickValues = thinTicks(longest.data.map((d) => d.x), s.maxXTicks);
+
+    // Dotted series need a custom lines layer (Nivo has no per-serie dash).
+    const dashed = new Set(dashedIds || []);
+    const linesLayer = ({ series, lineGenerator }: { series: LayerSerie[]; lineGenerator: (pts: unknown) => string }) => (
+        <>
+            {series.map((serie) => (
+                <path
+                    key={serie.id}
+                    d={lineGenerator(serie.data.map((d) => d.position))}
+                    fill="none"
+                    stroke={serie.color}
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeDasharray={dashed.has(String(serie.id)) ? '1 5' : undefined}
+                />
+            ))}
+        </>
+    );
 
     return (
         <div className={frameClass} style={frameStyle}>
@@ -63,10 +93,10 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
                 xScale={{ type: 'point' }}
                 yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
                 curve="monotoneX"
-                enableArea={true}
-                areaOpacity={0.15}
+                enableArea={s.areaOpacity > 0}
+                areaOpacity={s.areaOpacity}
                 colors={((serie: LineSerie) => colorById.get(serie.id)) as never}
-                pointSize={(data[0]?.data.length ?? 0) > 50 ? 0 : 6}
+                pointSize={0}
                 pointColor={{ theme: 'background' }}
                 pointBorderWidth={2}
                 pointBorderColor={{ from: 'serieColor' }}
@@ -74,6 +104,7 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
                 axisBottom={{ ...makeAxis(style, 'x', xColumn), ...(tickValues ? { tickValues } : {}) }}
                 axisLeft={makeAxis(style, 'y', yColumn, { numeric: true })}
                 useMesh={true}
+                layers={['grid', 'markers', 'axes', 'areas', linesLayer, 'crosshair', 'slices', 'mesh', 'legends'] as never}
                 theme={buildNivoTheme(style)}
             />
         </div>

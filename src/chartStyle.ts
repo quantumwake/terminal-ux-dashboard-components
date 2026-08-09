@@ -65,8 +65,16 @@ export interface ChartStyle {
     height: number;
     margin: Partial<ChartMargin> | null;
     // Point-scale x axes label EVERY point; maxXTicks caps them to at most N
-    // evenly-spaced ticks (0 ⇒ all ticks). See thinTicks().
+    // evenly-spaced ticks (0 ⇒ all ticks). See thinTicks(). On NUMERIC axes
+    // maxXTicks/maxYTicks become the Nivo tick-count hint instead.
     maxXTicks: number;
+    maxYTicks: number;
+    // Line charts: the area fill under each line (0 ⇒ no shading — several
+    // overlapping fills read as mush).
+    areaOpacity: number;
+    // Bar charts: the value label drawn on each bar (off when bars are
+    // dense — the labels collide with the axis).
+    barLabels: boolean;
     // Fixed-order categorical series palette ([] ⇒ the view's default hue,
     // or DEFAULT_SERIES_COLORS once a chart holds several series). Series
     // past the palette's end fold to a neutral — never a cycled hue.
@@ -115,6 +123,9 @@ export const DEFAULT_CHART_STYLE: ChartStyle = {
     height: 0,
     margin: null,
     maxXTicks: 0,
+    maxYTicks: 0,
+    areaOpacity: 0.15,
+    barLabels: true,
     seriesColors: [],
 };
 

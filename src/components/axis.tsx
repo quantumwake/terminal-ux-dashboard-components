@@ -97,5 +97,10 @@ export function makeAxis(style: Partial<ChartStyle> | null | undefined, axis: Ax
         out.tickRotation = rotate;
         out.format = (v: unknown) => formatVal(v, s, numeric);
     }
+
+    // Numeric axes: honor the tick cap as Nivo's tick-count hint (point/band
+    // axes instead take an explicit tickValues subset from the view).
+    const maxTicks = isX ? s.maxXTicks : s.maxYTicks;
+    if (numeric && maxTicks > 0) out.tickValues = maxTicks;
     return out;
 }

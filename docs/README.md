@@ -46,7 +46,7 @@ snapshot parquet. Same SQL, different executor.
 `make version` → bump patch → `gh release create v{X.Y.Z}` → CI (`publish.yml`) runs lint+build+
 `npm publish`. Local `make version` also lints+builds as a guard. Current: **0.1.3**.
 
-## Chart frame & series colors (0.1.20)
+## Chart frame & series colors (0.1.20, 0.1.21)
 `ChartStyle` gained `height` (px; 0 ⇒ fill parent), `margin` (merged over the view default),
 `maxXTicks` (thins point-scale x ticks — before this, a line chart labeled EVERY point), and
 `seriesColors` (fixed-order categorical palette). Every view honours them via `chartSizing()` —
