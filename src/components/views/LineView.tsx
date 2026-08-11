@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { ResponsiveLine } from '@nivo/line';
 
 import { buildNivoTheme, chartSizing, seriesColor, thinTicks, withStyleDefaults } from '../../chartStyle';
@@ -70,16 +70,15 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
     const longest = data.reduce((a, b) => (b.data.length > a.data.length ? b : a), { id: '', data: [] as LineSerie['data'] });
     const tickValues = thinTicks(longest.data.map((d) => d.x), s.maxXTicks);
 
-    // Stable scale: 0 up to a nice ceiling over the maximum EVER SEEN by
-    // this chart (line AND band bounds). The ceiling RATCHETS — it never
-    // shrinks when a spike slides out of a live window, so the lines never
-    // jump down and back up as the window moves. (Remount to reset.)
-    const ceilRef = useRef(0);
+    // Stable scale: 0 up to a nice 1–2–5×10^k ceiling over the CURRENT
+    // window's max (line AND band bounds). Quantization keeps it from
+    // breathing poll-to-poll; when an outlier ages out of a live window
+    // the ceiling steps DOWN once and the chart becomes readable again —
+    // a permanent ratchet trapped one churn spike as the scale forever.
     let yScale: Record<string, unknown> = { type: 'linear', min: 'auto', max: 'auto' };
     if (s.yFromZero) {
         const dataMax = Math.max(0, ...data.flatMap((serie) => serie.data.map((d) => Math.max(d.y, d.hi ?? d.y))));
-        ceilRef.current = Math.max(ceilRef.current, niceCeil(dataMax));
-        yScale = { type: 'linear', min: 0, max: ceilRef.current };
+        yScale = { type: 'linear', min: 0, max: niceCeil(dataMax) };
     }
 
     // Aggregate (banded) series, by id — they draw an envelope and carry
