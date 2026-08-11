@@ -8,10 +8,16 @@ import type { Row } from '../../sqlgen';
 
 export interface LineSerie {
     id: string;
+    /** Explicit serie color — STABLE identity coloring: the host assigns a
+     *  color to the entity, so toggling other series never repaints this
+     *  one (index-based palette assignment reshuffles on every selection
+     *  change). Absent ⇒ the fixed-order palette by index. */
+    color?: string;
     /** lo/hi (optional, per point) draw a soft envelope band behind the
      *  line — the reading for "this line summarizes several": the band is
-     *  the min–max spread of what it aggregates. */
-    data: { x: string; y: number; lo?: number; hi?: number }[];
+     *  the min–max spread of what it aggregates. y may be null for an
+     *  honest gap (the line breaks instead of bridging). */
+    data: { x: string; y: number | null; lo?: number; hi?: number }[];
 }
 
 export interface LineViewProps {
@@ -62,7 +68,7 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
     // seriesColor() for its legend/chips stays in step.
     const colorById = new Map(data.map((serie, i) => [
         serie.id,
-        s.seriesColors.length || data.length > 1 ? seriesColor(i, s) : 'rgba(96, 165, 250, 0.9)',
+        serie.color ?? (s.seriesColors.length || data.length > 1 ? seriesColor(i, s) : 'rgba(96, 165, 250, 0.9)'),
     ]));
 
     // Point x-scales label every point — thin to the style's cap (the ticks
@@ -77,7 +83,7 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
     // a permanent ratchet trapped one churn spike as the scale forever.
     let yScale: Record<string, unknown> = { type: 'linear', min: 'auto', max: 'auto' };
     if (s.yFromZero) {
-        const dataMax = Math.max(0, ...data.flatMap((serie) => serie.data.map((d) => Math.max(d.y, d.hi ?? d.y))));
+        const dataMax = Math.max(0, ...data.flatMap((serie) => serie.data.map((d) => Math.max(d.y ?? 0, d.hi ?? d.y ?? 0))));
         yScale = { type: 'linear', min: 0, max: niceCeil(dataMax) };
     }
 
