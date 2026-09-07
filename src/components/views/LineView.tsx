@@ -17,8 +17,16 @@ export interface LineSerie {
      *  line — the reading for "this line summarizes several": the band is
      *  the min–max spread of what it aggregates. y may be null for an
      *  honest gap (the line breaks instead of bridging). */
-    data: { x: string; y: number | null; lo?: number; hi?: number }[];
+    data: { x: string | Date | number; y: number | null; lo?: number; hi?: number }[];
 }
+
+// The time axis's default tick/tooltip clock: 24-hour, WITH the hour —
+// "56:42 · 00:16 · 03:30" (minute:second only) reads as a clock that reset
+// when a window crosses the top of the hour. hourCycle h23 rather than
+// hour12:false, which some engines render midnight as "24:00".
+const fmtClock = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+
+const toDate = (x: string | Date | number): Date => (x instanceof Date ? x : new Date(x));
 
 export interface LineViewProps {
     records?: Row[];
@@ -27,6 +35,20 @@ export interface LineViewProps {
     /** Pre-shaped Nivo line series bypasses client-side processing. */
     data?: LineSerie[];
     style?: Partial<ChartStyle>;
+    /** 'point' (default): x values are CATEGORIES, placed at equal spacing
+     *  in encounter order and ticked by sampling every Nth one — right for
+     *  labels, wrong for timestamps (a missing bucket collapses, and the
+     *  ticks land on arbitrary samples). 'time': x values are Dates (or
+     *  epoch ms / ISO strings) on a continuous scale — gaps stretch, ticks
+     *  land on ROUND times (d3's time ticks, capped by maxXTicks), and the
+     *  series need not share buckets. */
+    xScale?: 'point' | 'time';
+    /** Time axis tick + tooltip formatter. Default: HH:MM:SS, local, 24h. */
+    xFormat?: (x: Date) => string;
+    /** Time axis: pin the visible domain — a live window keeps a steady
+     *  width instead of re-fitting to whatever samples exist. Default: fit
+     *  the data. */
+    xDomain?: [Date, Date];
 }
 
 // Line layer datum shape Nivo hands custom layers (typed loosely on purpose —
@@ -40,7 +62,9 @@ interface LayerSerie {
     }[];
 }
 
-export function LineView({ records, xColumn, yColumn, data: presetData, style }: LineViewProps) {
+export function LineView({ records, xColumn, yColumn, data: presetData, style, xScale = 'point', xFormat, xDomain }: LineViewProps) {
+    const timed = xScale === 'time';
+    const clock = xFormat ?? fmtClock;
     const computed = useMemo<LineSerie[]>(() => {
         if (presetData || !records) return [];
         const sorted = [...records]
@@ -57,7 +81,13 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
             data: sorted.map((r) => ({ x: String(r[xColumn]), y: Number(r[yColumn]) || 0 })),
         }];
     }, [records, xColumn, yColumn, presetData]);
-    const data = presetData || computed;
+    const shaped = presetData || computed;
+    // A time scale wants native Dates ("format: 'native'"); coerce once so
+    // hosts may hand over epoch ms or ISO strings.
+    const data = useMemo<LineSerie[]>(
+        () => (timed ? shaped.map((serie) => ({ ...serie, data: serie.data.map((d) => ({ ...d, x: toDate(d.x) })) })) : shaped),
+        [shaped, timed],
+    );
 
     const s = withStyleDefaults(style);
     const { frameClass, frameStyle, margin } = chartSizing(style, { top: 20, right: 20, bottom: 60, left: 60 });
@@ -74,7 +104,21 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
     // Point x-scales label every point — thin to the style's cap (the ticks
     // must be a subset of the x values, so compute from the longest serie).
     const longest = data.reduce((a, b) => (b.data.length > a.data.length ? b : a), { id: '', data: [] as LineSerie['data'] });
-    const tickValues = thinTicks(longest.data.map((d) => d.x), s.maxXTicks);
+    const tickValues = timed ? undefined : thinTicks(longest.data.map((d) => d.x), s.maxXTicks);
+
+    // The bottom axis: a point axis takes the thinned category subset; a
+    // time axis drops makeAxis's wrapping tick (it would print Date.toString)
+    // and lets d3 choose ≤ maxXTicks round instants, labelled by the clock.
+    const axisBottom = (() => {
+        const base = makeAxis(style, 'x', xColumn);
+        if (!timed) return { ...base, ...(tickValues ? { tickValues } : {}) };
+        delete base.renderTick;
+        return { ...base, tickRotation: s.xTickRotation, format: clock, ...(s.maxXTicks > 0 ? { tickValues: s.maxXTicks } : {}) };
+    })();
+
+    const nivoXScale = timed
+        ? { type: 'time', format: 'native', precision: 'millisecond', useUTC: false, min: xDomain?.[0] ?? 'auto', max: xDomain?.[1] ?? 'auto' }
+        : { type: 'point' };
 
     // Stable scale: 0 up to a nice 1–2–5×10^k ceiling over the CURRENT
     // window's max (line AND band bounds). Quantization keeps it from
@@ -129,7 +173,8 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
             <ResponsiveLine
                 data={data as never}
                 margin={margin}
-                xScale={{ type: 'point' }}
+                xScale={nivoXScale as never}
+                xFormat={(timed ? (v: unknown) => clock(v as Date) : undefined) as never}
                 yScale={yScale as never}
                 curve="monotoneX"
                 enableArea={s.areaOpacity > 0}
@@ -140,7 +185,7 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style }:
                 pointBorderWidth={2}
                 pointBorderColor={{ from: 'serieColor' }}
                 enableGridX={false}
-                axisBottom={{ ...makeAxis(style, 'x', xColumn), ...(tickValues ? { tickValues } : {}) }}
+                axisBottom={axisBottom}
                 axisLeft={makeAxis(style, 'y', yColumn, { numeric: true })}
                 useMesh={true}
                 layers={['grid', 'markers', 'axes', 'areas', bandsLayer, linesLayer, 'crosshair', 'slices', 'mesh', 'legends'] as never}
