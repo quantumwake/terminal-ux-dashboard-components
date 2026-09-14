@@ -23,9 +23,12 @@ export interface BarViewProps {
      *  many bars with long names (labels never collide). Default vertical. */
     layout?: 'vertical' | 'horizontal';
     style?: Partial<ChartStyle>;
+    /** Value-axis tick + tooltip + in-bar label formatter (e.g. formatBytes
+     *  for a throughput series). Default: Number(value).toLocaleString(). */
+    yFormat?: (value: number) => string;
 }
 
-export function BarView({ records, groupColumn, valueColumn, aggFn = 'count', data: presetData, layout = 'vertical', style }: BarViewProps) {
+export function BarView({ records, groupColumn, valueColumn, aggFn = 'count', data: presetData, layout = 'vertical', style, yFormat }: BarViewProps) {
     const computed = useMemo<BarDatum[]>(() => {
         if (presetData || !records) return [];
         const groups = groupBy(records, groupColumn);
@@ -44,12 +47,15 @@ export function BarView({ records, groupColumn, valueColumn, aggFn = 'count', da
     // largest bar renders at the TOP (Nivo draws the first datum bottom-up).
     const horizontal = layout === 'horizontal';
     const plotted = horizontal ? [...data].reverse() : data;
+    // yFormat feeds the value axis's ticks (via makeAxis) and Nivo's own
+    // valueFormat, which drives the tooltip AND in-bar labels.
+    const valueFormat = yFormat ? (v: unknown) => yFormat(Number(v)) : undefined;
     const axisBottom = horizontal
-        ? makeAxis(style, 'x', valueColumn, { numeric: true })
+        ? makeAxis(style, 'x', valueColumn, { numeric: true, format: valueFormat })
         : makeAxis(style, 'x', groupColumn);
     const axisLeft = horizontal
         ? makeAxis(style, 'y', groupColumn)
-        : makeAxis(style, 'y', valueColumn, { numeric: true });
+        : makeAxis(style, 'y', valueColumn, { numeric: true, format: valueFormat });
 
     return (
         <div className={frameClass} style={frameStyle}>
@@ -64,6 +70,7 @@ export function BarView({ records, groupColumn, valueColumn, aggFn = 'count', da
                 borderColor={{ from: 'color', modifiers: [['darker', 1.6]] } as never}
                 axisBottom={axisBottom}
                 axisLeft={axisLeft}
+                valueFormat={valueFormat as never}
                 enableLabel={s.barLabels}
                 labelSkipWidth={12}
                 labelSkipHeight={12}
