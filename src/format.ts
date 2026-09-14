@@ -7,13 +7,14 @@
 // statefs throughput charts) — so every consumer picks the same unit rule
 // instead of hand-rolling KB/MB/GB math per dashboard.
 
-const BYTE_UNITS = ['KB', 'MB', 'GB', 'TB'];
+const BYTE_UNITS = ['KB', 'MB', 'GB', 'TB', 'PB'];
 
 /**
- * Formats a byte count as a human-readable string: plain bytes under 1024
- * ("999 B"), then KB/MB/GB/TB with one decimal place ("1.0 KB", "1.5 MB",
- * "2.0 GB"), capped at TB (no PB+). `perSecond` appends "/s" — for
- * throughput series (KB/s, MB/s, GB/s).
+ * Formats a byte count as a human-readable string: plain bytes under 1000
+ * ("999 B"), then KB/MB/GB/TB/PB with one decimal place ("1.0 KB", "1.5 MB",
+ * "2.0 GB"). Uses decimal (SI, base-1000) units, as the product lists them
+ * ("B / KB / MB / GB / TB / PB") — not KiB/MiB binary units. `perSecond`
+ * appends "/s" — for throughput series (KB/s, MB/s, GB/s).
  */
 export function formatBytes(value: number, perSecond = false): string {
     const suffix = perSecond ? '/s' : '';
@@ -21,12 +22,12 @@ export function formatBytes(value: number, perSecond = false): string {
 
     const sign = value < 0 ? '-' : '';
     const abs = Math.abs(value);
-    if (abs < 1024) return `${sign}${Math.round(abs)} B${suffix}`;
+    if (abs < 1000) return `${sign}${Math.round(abs)} B${suffix}`;
 
-    let scaled = abs / 1024;
+    let scaled = abs / 1000;
     let unit = 0;
-    while (scaled >= 1024 && unit < BYTE_UNITS.length - 1) {
-        scaled /= 1024;
+    while (scaled >= 1000 && unit < BYTE_UNITS.length - 1) {
+        scaled /= 1000;
         unit++;
     }
     return `${sign}${scaled.toFixed(1)} ${BYTE_UNITS[unit]}${suffix}`;
