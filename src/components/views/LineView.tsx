@@ -49,6 +49,9 @@ export interface LineViewProps {
      *  width instead of re-fitting to whatever samples exist. Default: fit
      *  the data. */
     xDomain?: [Date, Date];
+    /** Y-axis tick + tooltip value formatter (e.g. formatBytes for a
+     *  throughput series). Default: Number(value).toLocaleString(). */
+    yFormat?: (value: number) => string;
 }
 
 // Line layer datum shape Nivo hands custom layers (typed loosely on purpose —
@@ -62,7 +65,7 @@ interface LayerSerie {
     }[];
 }
 
-export function LineView({ records, xColumn, yColumn, data: presetData, style, xScale = 'point', xFormat, xDomain }: LineViewProps) {
+export function LineView({ records, xColumn, yColumn, data: presetData, style, xScale = 'point', xFormat, xDomain, yFormat }: LineViewProps) {
     const timed = xScale === 'time';
     const clock = xFormat ?? fmtClock;
     const computed = useMemo<LineSerie[]>(() => {
@@ -91,6 +94,9 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style, x
 
     const s = withStyleDefaults(style);
     const { frameClass, frameStyle, margin } = chartSizing(style, { top: 20, right: 20, bottom: 60, left: 60 });
+    // yFormat feeds both the y-axis ticks (via makeAxis) and Nivo's own
+    // yFormat, which drives the tooltip/crosshair value (point.data.yFormatted).
+    const yTickFormat = yFormat ? (v: unknown) => yFormat(Number(v)) : undefined;
 
     // One serie keeps the historical single-hue look; several series take the
     // fixed-order categorical palette (identical hues were unreadable). The
@@ -186,7 +192,8 @@ export function LineView({ records, xColumn, yColumn, data: presetData, style, x
                 pointBorderColor={{ from: 'serieColor' }}
                 enableGridX={false}
                 axisBottom={axisBottom}
-                axisLeft={makeAxis(style, 'y', yColumn, { numeric: true })}
+                axisLeft={makeAxis(style, 'y', yColumn, { numeric: true, format: yTickFormat })}
+                yFormat={yTickFormat as never}
                 useMesh={true}
                 layers={['grid', 'markers', 'axes', 'areas', bandsLayer, linesLayer, 'crosshair', 'slices', 'mesh', 'legends'] as never}
                 animate={s.animate}

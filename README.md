@@ -49,10 +49,35 @@ SQL service `/query`; a read-only host against DuckDB-WASM `read_parquet`).
 - ⏳ Components (landing in tranches): views/, `SqlConsole`,
   `ChartBuilder`, `DashboardRenderer`, `DataExplorer`
 
+## Value formatting (`yFormat`, `formatBytes`)
+
+`LineView`, `BarView` and `SparklineView` accept a `yFormat?: (value: number) =>
+string` prop that formats every numeric value rendered for the user — y-axis
+tick labels, hover/tooltip values, in-bar labels (`BarView`), and the
+latest-value readout (`SparklineView`). It's unset by default, so nothing
+changes for existing callers: ticks keep `Number(value).toLocaleString()` and
+the tooltip/label keep Nivo's own default formatting.
+
+`BarView`'s value axis follows `layout` — vertical puts it on the left,
+horizontal on the bottom — `yFormat` applies to whichever axis that is.
+
+```tsx
+import { LineView, BarView, formatBytes } from '@quantumwake/terminal-ux-dashboard-components';
+
+<LineView records={records} xColumn="t" yColumn="bytes_per_sec" yFormat={(v) => formatBytes(v, true)} />
+<BarView records={records} groupColumn="host" valueColumn="bytes" yFormat={formatBytes} />
+```
+
+`formatBytes(value, perSecond?)` is the shared unit rule for byte-ish series:
+B under 1024, then KB/MB/GB/TB with one decimal place (`"1.5 MB"`), capped at
+TB. Pass `perSecond: true` to append `/s` for a throughput series
+(`"2.0 GB/s"`).
+
 ## Build
 
 ```
 npm install
 npm run build   # tsup → dist (esm + cjs + d.ts)
 npm run lint    # tsc --noEmit
+npm run test    # vitest run
 ```

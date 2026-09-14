@@ -15,11 +15,16 @@ export interface SparklineViewProps {
     /** Show the CURRENT (last) value as a readout over the mark — a trend
      *  shape without its number answers "which way", never "how much". */
     showValue?: boolean;
-    /** Formats the readout (e.g. v => `${v.toFixed(1)} ms`). Default: locale. */
+    /** Formats the readout (e.g. v => `${v.toFixed(1)} ms`). Default: locale.
+     *  Prefer yFormat in new code — kept for existing callers. */
     format?: (v: number) => string;
+    /** Same as `format` — named to match LineView/BarView's yFormat prop
+     *  (e.g. formatBytes for a throughput sparkline). `format` wins if both
+     *  are given. */
+    yFormat?: (v: number) => string;
 }
 
-export function SparklineView({ data, height = 56, color = '#3987e5', showValue = false, format }: SparklineViewProps) {
+export function SparklineView({ data, height = 56, color = '#3987e5', showValue = false, format, yFormat }: SparklineViewProps) {
     // useId keeps gradient defs distinct when several sparklines share a page.
     const gradientId = useId();
     const width = 260; // viewBox width; preserveAspectRatio scales it away
@@ -31,7 +36,8 @@ export function SparklineView({ data, height = 56, color = '#3987e5', showValue 
     const area = `${line} L ${width} ${height} L 0 ${height} Z`;
 
     const current = pts[pts.length - 1];
-    const readout = format ? format(current) : current.toLocaleString(undefined, { maximumFractionDigits: 1 });
+    const fmt = format ?? yFormat;
+    const readout = fmt ? fmt(current) : current.toLocaleString(undefined, { maximumFractionDigits: 1 });
 
     return (
         <div className="relative">

@@ -14,11 +14,17 @@ type Axis = 'x' | 'y';
 
 interface AxisOpts {
     numeric?: boolean; // value axes → thousands-format the ticks
+    /** Overrides the numeric tick formatter (default: toLocaleString()) — a
+     *  view's yFormat prop (e.g. formatBytes) flows through here so axis
+     *  ticks read in the same unit as the tooltip. Only meaningful with
+     *  numeric: true. */
+    format?: (value: unknown) => string;
 }
 
-// Format a tick value to a display string: numeric → locale, then truncate.
-function formatVal(value: unknown, s: ChartStyle, numeric: boolean): string {
-    let str = numeric ? Number(value).toLocaleString() : String(value);
+// Format a tick value to a display string: numeric → custom format or locale,
+// then truncate.
+function formatVal(value: unknown, s: ChartStyle, numeric: boolean, custom?: (value: unknown) => string): string {
+    let str = custom ? custom(value) : numeric ? Number(value).toLocaleString() : String(value);
     if (s.tickTruncate > 0 && str.length > s.tickTruncate) str = `${str.slice(0, s.tickTruncate)}…`;
     return str;
 }
@@ -75,7 +81,7 @@ export function makeAxis(style: Partial<ChartStyle> | null | undefined, axis: Ax
             x: number; y: number; value: unknown; textX: number; textY: number;
             textAnchor: string; textBaseline: string;
         }): ReactNode => {
-            const lines = wrapText(formatVal(tick.value, s, numeric), s.tickWrapWidth);
+            const lines = wrapText(formatVal(tick.value, s, numeric, opts.format), s.tickWrapWidth);
             const firstDy = isX ? '0' : `${-((lines.length - 1) * 0.55)}em`;
             return (
                 <g transform={`translate(${tick.x},${tick.y})`}>
@@ -95,7 +101,7 @@ export function makeAxis(style: Partial<ChartStyle> | null | undefined, axis: Ax
         };
     } else {
         out.tickRotation = rotate;
-        out.format = (v: unknown) => formatVal(v, s, numeric);
+        out.format = (v: unknown) => formatVal(v, s, numeric, opts.format);
     }
 
     // Numeric axes: honor the tick cap as Nivo's tick-count hint (point/band

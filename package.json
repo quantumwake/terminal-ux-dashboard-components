@@ -43,6 +43,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepublishOnly": "npm run lint && npm run build",
     "release": "npm run lint && npm run build && npm publish --access public",
     "release:dry": "npm run lint && npm run build && npm publish --access public --dry-run",
@@ -76,7 +78,11 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tsup": "^8.4.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.7",
+    "jsdom": "^25.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/jest-dom": "^6.9.1"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

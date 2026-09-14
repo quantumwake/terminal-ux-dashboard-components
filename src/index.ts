@@ -67,6 +67,9 @@ export type {
 export { groupBy, aggregate } from './dataShape';
 export type { AggFn } from './dataShape';
 
+// Value-formatting helpers (pure) — shared by chart views' yFormat prop
+export { formatBytes } from './format';
+
 // Heatmap-plus color engine (pure)
 export { normalizeCells, heatColor, heatLabelColor, HEAT_STATS } from './heatmapColor';
 export type { HeatStat, ColorScope, ColorMethod, HeatCell, ColorOptions } from './heatmapColor';
