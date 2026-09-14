@@ -30,4 +30,10 @@ describe('formatBytes', () => {
     it('preserves sign for negative deltas', () => {
         expect(formatBytes(-2000)).toBe('-2.0 KB');
     });
+
+    it('rolls to the next unit when rounding reaches 1000.0', () => {
+        expect(formatBytes(999999)).toBe('1.0 MB');
+        expect(formatBytes(999949)).toBe('999.9 KB');
+        expect(formatBytes(999999999)).toBe('1.0 GB');
+    });
 });
