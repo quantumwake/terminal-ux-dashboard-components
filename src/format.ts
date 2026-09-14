@@ -30,5 +30,12 @@ export function formatBytes(value: number, perSecond = false): string {
         scaled /= 1000;
         unit++;
     }
+    // Rounding to one decimal can itself reach 1000.0 (e.g. 999,999 B scales
+    // to 999.999 KB, which rounds to "1000.0 KB"). Roll to the next unit so
+    // the displayed value always stays below 1000.
+    if (scaled.toFixed(1) === '1000.0' && unit < BYTE_UNITS.length - 1) {
+        scaled /= 1000;
+        unit++;
+    }
     return `${sign}${scaled.toFixed(1)} ${BYTE_UNITS[unit]}${suffix}`;
 }
